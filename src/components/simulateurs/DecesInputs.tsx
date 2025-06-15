@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -28,7 +27,7 @@ const liensParente = [
   { value: "conjoint", label: "Conjoint marié ou partenaire PACS (Exonération Tepa)", subtitle: "Totalement exonéré de droits de succession" },
   { value: "enfant", label: "Enfant", subtitle: "Abattement 100 000 € en droits de succession" },
   { value: "petit-enfant", label: "Petit-enfant", subtitle: "Abattement 1 594 € en droits de succession" },
-  { value: "frere-soeur", label = "Frère/Sœur", subtitle: "Abattement 15 932 € en droits de succession" },
+  { value: "frere-soeur", label: "Frère/Sœur", subtitle: "Abattement 15 932 € en droits de succession" },
   { value: "neveu-niece", label: "Neveu/Nièce", subtitle: "Abattement 7 967 € en droits de succession" },
   { value: "autre", label: "Concubin/Autre (sans lien)", subtitle: "Abattement minimal 1 594 € - Taux maximal 60%" },
 ];
