@@ -1,3 +1,4 @@
+
 export type RachatInputs = {
   valeurContrat: number;
   versements: number;
@@ -19,7 +20,9 @@ export type RachatResultats = {
 };
 
 /**
- * Calcule toutes les valeurs utiles selon la logique indiquée
+ * Calcule toutes les valeurs utiles selon la fiscalité française de l'assurance vie.
+ * - PFU : jamais d'abattement, toujours sur la totalité de la part d'intérêts.
+ * - Barème IR : abattement de 4600 € (ou 9200 si couple), uniquement si +8 ans.
  */
 export function calculRachat(inputs: RachatInputs): RachatResultats {
   const {
@@ -39,16 +42,17 @@ export function calculRachat(inputs: RachatInputs): RachatResultats {
   // Prélèvements sociaux (toujours 17,2 % sur part intérêts)
   const pso = partInterets * 0.172;
 
-  // PFU (12,8%)
+  // PFU (12,8%) - jamais d'abattement
   const impotPFU = partInterets * 0.128;
 
-  // Abattement si +8 ans
+  // Abattement barème IR si +8 ans
   let abattement = 0;
   if (anciennete === "plus8") {
     abattement = 4600;
+    // Pour couple : 9200, à rendre dynamique selon le foyer
   }
 
-  // Barème IR : TMI × part après abattement
+  // Barème IR : TMI × part après abattement seulement
   let baseIR = Math.max(0, partInterets - abattement);
   const impotIR = baseIR * (tmi / 100);
 
@@ -57,13 +61,16 @@ export function calculRachat(inputs: RachatInputs): RachatResultats {
   const netIR = montantRachat - (impotIR + pso);
 
   let message = undefined;
-  // Suggestion : si baseIR == 0, le barème IR est forcément le plus avantageux fiscalement (zéro impôt)
+  // Suggestion : si baseIR == 0, le barème IR est forcément le plus avantageux fiscalement (zéro impôt)
   if (baseIR === 0) {
-    message = "Le barème IR est le plus avantageux dans votre cas, car la base imposable est nulle.";
+    message =
+      "Le barème IR est le plus avantageux dans votre cas, car la base imposable (après abattement) est nulle : seuls les prélèvements sociaux sont dus.";
   } else if (netIR > netPFU) {
-    message = "Le PFU (prélèvement forfaitaire unique) est plus avantageux dans votre cas.";
+    message =
+      "Le PFU (prélèvement forfaitaire unique, flat tax) est plus avantageux dans votre cas.";
   } else if (netIR < netPFU) {
-    message = "Le barème IR est plus avantageux dans votre cas (hors prélèvements sociaux).";
+    message =
+      "Le barème IR est plus avantageux dans votre cas (hors prélèvements sociaux).";
   }
 
   return {
@@ -77,3 +84,4 @@ export function calculRachat(inputs: RachatInputs): RachatResultats {
     message,
   };
 }
+
