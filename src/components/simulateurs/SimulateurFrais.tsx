@@ -30,7 +30,7 @@ const defaultParams = {
   rendementGSM: 7,
   pctUC: 30,
   pctGSM: 0,
-  fraisGestionEuros: 0.6,
+  fraisGestionAssureur: 0.6,
   fraisGestionUC: 0.8,
   fraisGestionGSM: 1.9,
   fraisSurVersement: 2,
@@ -76,14 +76,15 @@ const SimulateurFrais = () => {
     setError("");
   };
 
-  // AMÉLIORATION : Calcul plus précis avec frais sur versements et frais de gestion par support
+  // Calcul avec distinction frais assureur vs gérants de fonds
   function calcSimu(withFees: boolean) {
     let capitalEuros = 0;
     let capitalUC = 0;
     let capitalGSM = 0;
     let data = [];
     let totalFraisSurVersement = 0;
-    let totalFraisGestion = 0;
+    let totalFraisAssureur = 0;
+    let totalFraisGerants = 0;
     let totalFraisArbitrage = 0;
 
     // Répartition du versement initial par support
@@ -120,28 +121,42 @@ const SimulateurFrais = () => {
       capitalUC += interetsUC;
       capitalGSM += interetsGSM;
 
-      // Calcul des frais de gestion par support (basés sur l'encours de chaque support)
+      // Calcul des frais de gestion
       if (withFees) {
-        const fraisEuros = capitalEuros * (params.fraisGestionEuros / 100 / 12);
-        const fraisUC = capitalUC * (params.fraisGestionUC / 100 / 12);
-        const fraisGSM = capitalGSM * (params.fraisGestionGSM / 100 / 12);
+        // FRAIS ASSUREUR : sur l'intégralité du contrat
+        const capitalTotal = capitalEuros + capitalUC + capitalGSM;
+        const fraisAssureurMensuel = capitalTotal * (params.fraisGestionAssureur / 100 / 12);
         
-        capitalEuros -= fraisEuros;
-        capitalUC -= fraisUC;
-        capitalGSM -= fraisGSM;
+        // Répartition proportionnelle des frais assureur sur chaque support
+        const fraisAssureurEuros = fraisAssureurMensuel * (capitalEuros / capitalTotal || 0);
+        const fraisAssureurUC = fraisAssureurMensuel * (capitalUC / capitalTotal || 0);
+        const fraisAssureurGSM = fraisAssureurMensuel * (capitalGSM / capitalTotal || 0);
         
-        const fraisGestionMensuel = fraisEuros + fraisUC + fraisGSM;
-        totalFraisGestion += fraisGestionMensuel;
+        capitalEuros -= fraisAssureurEuros;
+        capitalUC -= fraisAssureurUC;
+        capitalGSM -= fraisAssureurGSM;
+        
+        totalFraisAssureur += fraisAssureurMensuel;
+
+        // FRAIS GÉRANTS : sur l'encours spécifique de chaque support
+        const fraisGerantUC = capitalUC * (params.fraisGestionUC / 100 / 12);
+        const fraisGerantGSM = capitalGSM * (params.fraisGestionGSM / 100 / 12);
+        
+        capitalUC -= fraisGerantUC;
+        capitalGSM -= fraisGerantGSM;
+        
+        const fraisGerantsMensuel = fraisGerantUC + fraisGerantGSM;
+        totalFraisGerants += fraisGerantsMensuel;
 
         // Frais d'arbitrage (calculés sur le capital total une fois par an)
         if (mois % 12 === 0 && params.nbArbitragesParAn > 0) {
-          const capitalTotal = capitalEuros + capitalUC + capitalGSM;
-          const fraisArbitrageMensuel = capitalTotal * (params.fraisArbitrage / 100) * params.nbArbitragesParAn;
+          const capitalTotalApresGestion = capitalEuros + capitalUC + capitalGSM;
+          const fraisArbitrageMensuel = capitalTotalApresGestion * (params.fraisArbitrage / 100) * params.nbArbitragesParAn;
           
           // Répartition proportionnelle des frais d'arbitrage
-          const fraisArbitrageEuros = fraisArbitrageMensuel * (capitalEuros / capitalTotal);
-          const fraisArbitrageUC = fraisArbitrageMensuel * (capitalUC / capitalTotal);
-          const fraisArbitrageGSM = fraisArbitrageMensuel * (capitalGSM / capitalTotal);
+          const fraisArbitrageEuros = fraisArbitrageMensuel * (capitalEuros / capitalTotalApresGestion || 0);
+          const fraisArbitrageUC = fraisArbitrageMensuel * (capitalUC / capitalTotalApresGestion || 0);
+          const fraisArbitrageGSM = fraisArbitrageMensuel * (capitalGSM / capitalTotalApresGestion || 0);
           
           capitalEuros -= fraisArbitrageEuros;
           capitalUC -= fraisArbitrageUC;
@@ -177,7 +192,8 @@ const SimulateurFrais = () => {
         capitalUC,
         capitalGSM,
         totalFraisSurVersement: withFees ? totalFraisSurVersement : 0,
-        totalFraisGestion: withFees ? totalFraisGestion : 0,
+        totalFraisAssureur: withFees ? totalFraisAssureur : 0,
+        totalFraisGerants: withFees ? totalFraisGerants : 0,
         totalFraisArbitrage: withFees ? totalFraisArbitrage : 0
       });
     }
@@ -185,9 +201,10 @@ const SimulateurFrais = () => {
     return {
       data,
       totalFraisSurVersement,
-      totalFraisGestion,
+      totalFraisAssureur,
+      totalFraisGerants,
       totalFraisArbitrage,
-      totalFrais: totalFraisSurVersement + totalFraisGestion + totalFraisArbitrage
+      totalFrais: totalFraisSurVersement + totalFraisAssureur + totalFraisGerants + totalFraisArbitrage
     };
   }
 
@@ -217,7 +234,8 @@ const SimulateurFrais = () => {
         rendementAvecFrais,
         impactSurRendement,
         totalFraisSurVersement: avecFrais.totalFraisSurVersement,
-        totalFraisGestion: avecFrais.totalFraisGestion,
+        totalFraisAssureur: avecFrais.totalFraisAssureur,
+        totalFraisGerants: avecFrais.totalFraisGerants,
         totalFraisArbitrage: avecFrais.totalFraisArbitrage,
         totalFrais: avecFrais.totalFrais
       };
@@ -236,10 +254,11 @@ const SimulateurFrais = () => {
     return [];
   }, [resultats]);
 
-  // Données pour le graphique des frais
+  // Données pour le graphique des frais avec distinction assureur/gérants
   const fraisData = resultats ? [
     { name: "Frais sur versements", value: resultats.totalFraisSurVersement },
-    { name: "Frais de gestion", value: resultats.totalFraisGestion },
+    { name: "Frais assureur (contrat)", value: resultats.totalFraisAssureur },
+    { name: "Frais gérants UC/GSM", value: resultats.totalFraisGerants },
     { name: "Frais d'arbitrage", value: resultats.totalFraisArbitrage },
   ].filter(item => item.value > 0) : [];
 
@@ -372,24 +391,25 @@ const SimulateurFrais = () => {
 
         <Separator className="col-span-2" />
 
-        {/* Frais */}
+        {/* Structure de frais mise à jour */}
         <div className="col-span-2 bg-orange-50 p-4 rounded-lg">
           <h3 className="font-semibold mb-4">💸 Structure de frais</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="fraisGestionEuros">Frais gestion € (%/an)</Label>
+              <Label htmlFor="fraisGestionAssureur">Frais assureur - contrat total (%/an)</Label>
               <Input
                 type="number"
-                id="fraisGestionEuros"
+                id="fraisGestionAssureur"
                 min={0}
                 max={5}
                 step={0.1}
-                value={params.fraisGestionEuros}
-                onChange={(e) => handleChange("fraisGestionEuros", parseFloat(e.target.value))}
+                value={params.fraisGestionAssureur}
+                onChange={(e) => handleChange("fraisGestionAssureur", parseFloat(e.target.value))}
               />
+              <p className="text-xs text-gray-500 mt-1">Appliqués sur l'intégralité du contrat</p>
             </div>
             <div>
-              <Label htmlFor="fraisGestionUC">Frais gestion UC (%/an)</Label>
+              <Label htmlFor="fraisGestionUC">Frais gérant UC (%/an)</Label>
               <Input
                 type="number"
                 id="fraisGestionUC"
@@ -399,9 +419,10 @@ const SimulateurFrais = () => {
                 value={params.fraisGestionUC}
                 onChange={(e) => handleChange("fraisGestionUC", parseFloat(e.target.value))}
               />
+              <p className="text-xs text-gray-500 mt-1">Appliqués sur l'encours UC uniquement</p>
             </div>
             <div>
-              <Label htmlFor="fraisGestionGSM">Frais gestion GSM (%/an)</Label>
+              <Label htmlFor="fraisGestionGSM">Frais gérant GSM (%/an)</Label>
               <Input
                 type="number"
                 id="fraisGestionGSM"
@@ -411,6 +432,7 @@ const SimulateurFrais = () => {
                 value={params.fraisGestionGSM}
                 onChange={(e) => handleChange("fraisGestionGSM", parseFloat(e.target.value))}
               />
+              <p className="text-xs text-gray-500 mt-1">Appliqués sur l'encours GSM uniquement</p>
             </div>
             <div>
               <Label htmlFor="fraisSurVersement">Frais sur versements (%)</Label>
@@ -504,7 +526,7 @@ const SimulateurFrais = () => {
             </div>
           </div>
 
-          {/* Détail des frais */}
+          {/* Détail des frais mis à jour */}
           {fraisData.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -538,6 +560,16 @@ const SimulateurFrais = () => {
                       <span className="font-medium">Total des frais :</span>
                       <span className="text-red-600 ml-2">{formatMontant(resultats.totalFrais)}</span>
                     </div>
+                    <div className="mt-3 pt-2 border-t border-gray-200">
+                      <div className="text-xs text-gray-600 space-y-1">
+                        <div>• Frais assureur : {formatMontant(resultats.totalFraisAssureur)}</div>
+                        <div>• Frais gérants : {formatMontant(resultats.totalFraisGerants)}</div>
+                        <div>• Frais versements : {formatMontant(resultats.totalFraisSurVersement)}</div>
+                        {resultats.totalFraisArbitrage > 0 && (
+                          <div>• Frais arbitrage : {formatMontant(resultats.totalFraisArbitrage)}</div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -546,7 +578,8 @@ const SimulateurFrais = () => {
                   <ul className="space-y-1 text-blue-700">
                     <li>• Négociez les frais sur versements, souvent évitables</li>
                     <li>• Limitez les arbitrages fréquents</li>
-                    <li>• Privilégiez les supports avec frais réduits</li>
+                    <li>• Comparez les frais assureur entre contrats</li>
+                    <li>• Attention aux frais cumulés assureur + gérants</li>
                     <li>• Considérez l'allocation UC/€ selon votre horizon</li>
                   </ul>
                 </div>
