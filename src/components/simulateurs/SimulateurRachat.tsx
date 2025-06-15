@@ -4,6 +4,7 @@ import RachatInputs from "./RachatInputs";
 import RachatResultats from "./RachatResultats";
 import { calculRachat } from "./simulateurRachatUtils";
 import { cn } from "@/lib/utils";
+import { Button } from "../ui/button";
 
 const initialValues = {
   valeurContrat: "",
@@ -18,6 +19,7 @@ const initialValues = {
 
 const SimulateurRachat: React.FC = () => {
   const [values, setValues] = useState(initialValues);
+  const [showResults, setShowResults] = useState(false);
 
   // Gestion des modifications (inputs)
   const handleChange = (name: string, value: string) => {
@@ -25,16 +27,18 @@ const SimulateurRachat: React.FC = () => {
       ...prev,
       [name]: value,
     }));
+    setShowResults(false);
   };
 
   // Reset
-  const handleReset = () => setValues(initialValues);
+  const handleReset = () => {
+    setValues(initialValues);
+    setShowResults(false);
+  };
 
   // Calcul automatique de la TMI basé sur le revenu net imposable et le nombre de parts
   const calculateTMI = (revenuNetImposable: number, foyer: number): number => {
     const quotientFamilial = revenuNetImposable / foyer;
-    
-    // Barème 2024 (simplifié)
     if (quotientFamilial <= 11294) return 0;
     if (quotientFamilial <= 28797) return 11;
     if (quotientFamilial <= 82341) return 30;
@@ -50,7 +54,7 @@ const SimulateurRachat: React.FC = () => {
         Number(values.foyer) || 1
       );
 
-  // Calculs seulement si tous les champs obligatoires sont remplis
+  // Prêt à calculer si champs requis remplis
   const ready =
     !!values.valeurContrat &&
     !!values.versements &&
@@ -58,7 +62,7 @@ const SimulateurRachat: React.FC = () => {
     (values.modeTMI === "manuel" ? !!values.tmi : !!values.revenuNetImposable);
 
   let resultats;
-  if (ready) {
+  if (showResults && ready) {
     resultats = calculRachat({
       valeurContrat: parseFloat(values.valeurContrat),
       versements: parseFloat(values.versements),
@@ -70,27 +74,38 @@ const SimulateurRachat: React.FC = () => {
     });
   }
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setShowResults(true);
+  };
+
   return (
     <div className="w-full max-w-2xl mx-auto bg-card rounded-xl shadow-xl p-8 animate-fade-in">
       <h2 className="text-2xl font-bold mb-4 text-primary">Simulation de rachat</h2>
-      <form className="space-y-6" autoComplete="off" onSubmit={e => e.preventDefault()}>
+      <form className="space-y-6" autoComplete="off" onSubmit={handleSubmit}>
         <RachatInputs values={values} onChange={handleChange} />
+        <div className="flex gap-4 mt-6 flex-wrap">
+          <Button
+            type="submit"
+            disabled={!ready}
+            className=""
+            variant="default"
+          >
+            Calculer
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleReset}
+          >
+            Réinitialiser
+          </Button>
+        </div>
       </form>
-      <div className="flex gap-4 mt-8 flex-wrap">
-        <button
-          type="button"
-          className={cn(
-            "bg-primary text-primary-foreground px-6 py-3 rounded-lg font-semibold shadow hover:bg-primary/90 transition"
-          )}
-          onClick={handleReset}
-        >
-          Recommencer une simulation
-        </button>
-      </div>
       <p className="text-xs text-muted-foreground mt-4">
         Renseignez toutes les valeurs pour visualiser la fiscalité du rachat partiel ou total.
       </p>
-      {ready && resultats && (
+      {showResults && ready && resultats && (
         <RachatResultats montantRachat={parseFloat(values.montantRachat)} resultats={resultats} />
       )}
     </div>
@@ -98,3 +113,4 @@ const SimulateurRachat: React.FC = () => {
 };
 
 export default SimulateurRachat;
+

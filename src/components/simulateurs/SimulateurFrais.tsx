@@ -1,14 +1,21 @@
-import React, { useState } from "react";
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Area, AreaChart } from "recharts";
+import React, { useState, useMemo } from "react";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { Slider } from "@/components/ui/slider";
+import { Separator } from "@/components/ui/separator";
+import { formatPourcentage, formatMontant } from "@/lib/utils";
+import { Button } from "../ui/button";
 
 type Supports = "fonds_euros" | "uc" | "gsm";
-const supports = [
-  { id: "fonds_euros", label: "Fonds euros" },
-  { id: "uc", label: "Unités de compte (UC)" },
-  { id: "gsm", label: "Gestion profilée (GSM)" },
-];
 
 const defaultParams = {
   duree: 15,
@@ -17,88 +24,123 @@ const defaultParams = {
   support: "fonds_euros" as Supports,
   repartition: 70,
   rendementEuros: 2.2,
-  rendementUC: 5.0,
-  rendementGSM: 4.0,
-  fraisEntree: 1.5,
-  fraisGestionContrat: 0.7,
-  fraisGestionUC: 0.85,
-  fraisGestionGSM: 1.00,
+  rendementUC: 5,
+  rendementGSM: 7,
+  pctUC: 30,
+  pctGSM: 0,
+  fraisGestionEuros: 0.6,
+  fraisGestionUC: 0.8,
+  fraisGestionGSM: 1.9,
+  fraisEntree: 2,
+  fraisArbitrage: 0.5,
 };
 
-function currencyFormat(val: number) {
-  return val.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
-}
-
-function percentFormat(val: number) {
-  return `${val.toFixed(2)} %`;
-}
+type Params = typeof defaultParams;
 
 const SimulateurFrais = () => {
   const [params, setParams] = useState(defaultParams);
+  const [showResults, setShowResults] = useState(false);
 
-  // Calculer la répartition
-  const otherPct = 100 - params.repartition;
+  const handleChange = (name: keyof Params, value: number | string) => {
+    setParams((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
 
-  // Calculs du simulateur
-  function simulation(withFees: boolean) {
+  const percentFormat = (value: number) => `${value} %`;
+  const montantFormat = (value: number) => `${value.toFixed(0)} €`;
+
+  function calcSimu(withFees: boolean) {
     let capital = params.versementInitial;
-    const data: { annee: number; capital: number }[] = [
-      { annee: 0, capital }
-    ];
+    let data = [];
 
-    // Récupère taux par support
-    const tauxEuros = withFees
-      ? params.rendementEuros - params.fraisGestionContrat
-      : params.rendementEuros;
-    const tauxUC = withFees
-      ? params.rendementUC - (params.fraisGestionContrat + params.fraisGestionUC)
-      : params.rendementUC;
-    const tauxGSM = withFees
-      ? params.rendementGSM - (params.fraisGestionContrat + params.fraisGestionGSM)
-      : params.rendementGSM;
+    for (let mois = 1; mois <= params.duree * 12; mois++) {
+      // 1. Calcul des rendements
+      const rendementEurosMensuel = params.rendementEuros / 100 / 12;
+      const rendementUCMensuel = params.rendementUC / 100 / 12;
+      const rendementGSMMensuel = params.rendementGSM / 100 / 12;
 
-    let pctEuros = 0,
-      pctUC = 0,
-      pctGSM = 0;
-    if (params.support === "fonds_euros") {
-      pctEuros = 1;
-    } else if (params.support === "uc") {
-      pctEuros = params.repartition / 100;
-      pctUC = otherPct / 100;
-    } else if (params.support === "gsm") {
-      pctEuros = params.repartition / 100;
-      pctGSM = otherPct / 100;
-    }
+      // 2. Calcul des frais
+      const fraisGestionEurosMensuel = params.fraisGestionEuros / 100 / 12;
+      const fraisGestionUCMensuel = params.fraisGestionUC / 100 / 12;
+      const fraisGestionGSMMensuel = params.fraisGestionGSM / 100 / 12;
 
-    // Versement initial avec frais d'entrée
-    let capitalCurrent = params.versementInitial * (1 - (withFees ? params.fraisEntree / 100 : 0));
+      // 3. Application des rendements et frais par support
+      const interetsEuros = capital * (1 - params.pctUC / 100 - params.pctGSM / 100) * rendementEurosMensuel;
+      const interetsUC = capital * (params.pctUC / 100) * rendementUCMensuel;
+      const interetsGSM = capital * (params.pctGSM / 100) * rendementGSMMensuel;
 
-    // Taux de rendement mensuel composite
-    const tauxMensuelComposite = (pctEuros * tauxEuros + pctUC * tauxUC + pctGSM * tauxGSM) / 100 / 12;
-    
-    // Versement mensuel net après frais d'entrée
-    const versementMensuelNet = params.versementMensuel * (1 - (withFees ? params.fraisEntree / 100 : 0));
+      let fraisEuros = 0;
+      let fraisUC = 0;
+      let fraisGSM = 0;
 
-    for (let i = 1; i <= params.duree; i++) {
-      // Application des intérêts mensuels et ajout des versements mensuels
-      for (let mois = 0; mois < 12; mois++) {
-        capitalCurrent = capitalCurrent * (1 + tauxMensuelComposite) + versementMensuelNet;
+      if (withFees) {
+        fraisEuros = capital * (1 - params.pctUC / 100 - params.pctGSM / 100) * fraisGestionEurosMensuel;
+        fraisUC = capital * (params.pctUC / 100) * fraisGestionUCMensuel;
+        fraisGSM = capital * (params.pctGSM / 100) * fraisGestionGSMMensuel;
       }
-      
-      data.push({
-        annee: i,
-        capital: capitalCurrent,
-      });
+
+      capital += interetsEuros + interetsUC + interetsGSM - fraisEuros - fraisUC - fraisGSM;
+
+      // Versement mensuel
+      capital += params.versementMensuel;
+
+      data.push({ mois, capital });
     }
+
     return data;
   }
 
-  const dataAvecFrais = simulation(true);
-  const dataSansFrais = simulation(false);
+  const ready = params.versementInitial > 0 && params.duree > 0;
 
-  const capitalNetAvecFrais = dataAvecFrais[dataAvecFrais.length - 1].capital;
-  const capitalNetSansFrais = dataSansFrais[dataSansFrais.length - 1].capital;
-  const impactFrais = capitalNetSansFrais - capitalNetAvecFrais;
+  // Gestion du submit (calcul)
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setShowResults(true);
+  };
+
+  // Réinit
+  const handleReset = () => {
+    setParams(defaultParams);
+    setShowResults(false);
+  };
+
+  const resultats = useMemo(() => {
+    if (showResults) {
+      const dataSansFrais = calcSimu(false);
+      const dataAvecFrais = calcSimu(true);
+
+      const capitalSansFrais = dataSansFrais[dataSansFrais.length - 1]?.capital || 0;
+      const capitalAvecFrais = dataAvecFrais[dataAvecFrais.length - 1]?.capital || 0;
+      const difference = capitalSansFrais - capitalAvecFrais;
+
+      return {
+        dataSansFrais,
+        dataAvecFrais,
+        capitalSansFrais,
+        capitalAvecFrais,
+        difference,
+      };
+    }
+    return null;
+  }, [params, showResults]);
+
+  const chartData = useMemo(() => {
+    if (resultats) {
+      const dataSansFrais = resultats.dataSansFrais;
+      const dataAvecFrais = resultats.dataAvecFrais;
+
+      // Fusionner les deux tableaux en un seul pour le graphique
+      const chartData = dataSansFrais.map((item, index) => ({
+        mois: item.mois,
+        "Sans Frais": item.capital,
+        "Avec Frais": dataAvecFrais[index]?.capital || 0,
+      }));
+      return chartData;
+    }
+    return [];
+  }, [resultats]);
 
   return (
     <div className="w-full max-w-3xl mx-auto bg-card rounded-xl shadow-xl p-8 animate-fade-in">
@@ -108,220 +150,270 @@ const SimulateurFrais = () => {
       </p>
       <form
         className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6"
-        onSubmit={e => e.preventDefault()}
+        autoComplete="off"
+        onSubmit={handleSubmit}
       >
-        <div className="space-y-4">
-          <label className="font-semibold block">
-            Durée (années)
-            <input
-              type="range"
-              min={5}
-              max={40}
-              step={1}
-              value={params.duree}
-              onChange={e => setParams(p => ({ ...p, duree: parseInt(e.target.value, 10) }))}
-              className="w-full accent-primary"
-            />
-            <span className="font-mono ml-2">{params.duree} ans</span>
-          </label>
-          <label className="font-semibold block">
-            Versement initial (€)
-            <Input
-              type="number"
-              min={0}
-              step={500}
-              value={params.versementInitial}
-              onChange={e => setParams(p => ({ ...p, versementInitial: Number(e.target.value) }))}
-              className="w-full"
-            />
-          </label>
-          <label className="font-semibold block">
-            Versement mensuel (€)
-            <Input
-              type="number"
-              min={0}
-              step={50}
-              value={params.versementMensuel}
-              onChange={e => setParams(p => ({ ...p, versementMensuel: Number(e.target.value) }))}
-              className="w-full"
-            />
-          </label>
-          <label className="font-semibold block">
-            Support / Gestion
-            <select
-              value={params.support}
-              onChange={e => setParams(p => ({ ...p, support: e.target.value as Supports }))}
-              className="w-full px-4 py-2 rounded border mt-1"
-            >
-              {supports.map(s => (
-                <option key={s.id} value={s.id}>{s.label}</option>
-              ))}
-            </select>
-          </label>
-          {(params.support === "uc" || params.support === "gsm") && (
-            <label className="font-semibold block">
-              Répartition Fonds € / {params.support === "uc" ? "UC" : "GSM"} (%)
-              <div className="flex items-center gap-2">
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={params.repartition}
-                  onChange={e => setParams(p => ({ ...p, repartition: Number(e.target.value) }))}
-                  className="w-full accent-primary"
-                />
-                <span className="ml-2">
-                  {params.repartition}% / {100 - params.repartition}%
-                </span>
-              </div>
-            </label>
-          )}
+        <div>
+          <Label htmlFor="duree">Durée (années)</Label>
+          <Input
+            type="number"
+            id="duree"
+            min={1}
+            max={40}
+            value={params.duree}
+            onChange={(e) => handleChange("duree", parseInt(e.target.value))}
+          />
         </div>
-        <div className="space-y-4">
-          <label className="font-semibold block">
-            Taux de rendement Fonds € (%/an)
-            <Input
-              type="number"
-              min={0}
-              max={8}
-              step={0.1}
-              value={params.rendementEuros}
-              onChange={e => setParams(p => ({ ...p, rendementEuros: Number(e.target.value) }))}
-              className="w-full"
-            />
-          </label>
-          {(params.support === "uc" || params.support === "fonds_euros") && (
-            <label className="font-semibold block">
-              Taux de rendement UC (%/an)
-              <Input
-                type="number"
-                min={0}
-                max={15}
-                step={0.1}
-                value={params.rendementUC}
-                onChange={e => setParams(p => ({ ...p, rendementUC: Number(e.target.value) }))}
-                className="w-full"
-                disabled={params.support === "fonds_euros"}
-              />
-            </label>
-          )}
-          {params.support === "gsm" && (
-            <label className="font-semibold block">
-              Taux GSM (%/an)
-              <Input
-                type="number"
-                min={0}
-                max={10}
-                step={0.1}
-                value={params.rendementGSM}
-                onChange={e => setParams(p => ({ ...p, rendementGSM: Number(e.target.value) }))}
-                className="w-full"
-              />
-            </label>
-          )}
-          <label className="font-semibold block">
-            Frais d'entrée (% sur chaque versement)
-            <Input
-              type="number"
-              min={0}
-              max={10}
-              step={0.05}
-              value={params.fraisEntree}
-              onChange={e => setParams(p => ({ ...p, fraisEntree: Number(e.target.value) }))}
-              className="w-full"
-            />
-          </label>
-          <label className="font-semibold block">
-            Frais de gestion du contrat (%/an)
-            <Input
-              type="number"
-              min={0}
-              max={2}
-              step={0.01}
-              value={params.fraisGestionContrat}
-              onChange={e => setParams(p => ({ ...p, fraisGestionContrat: Number(e.target.value) }))}
-              className="w-full"
-            />
-          </label>
-          {(params.support === "uc") && (
-            <label className="font-semibold block">
-              Frais de gestion sur UC (%/an)
-              <Input
-                type="number"
-                min={0}
-                max={2}
-                step={0.01}
-                value={params.fraisGestionUC}
-                onChange={e => setParams(p => ({ ...p, fraisGestionUC: Number(e.target.value) }))}
-                className="w-full"
-              />
-            </label>
-          )}
-          {(params.support === "gsm") && (
-            <label className="font-semibold block">
-              Frais de gestion GSM (%/an)
-              <Input
-                type="number"
-                min={0}
-                max={2}
-                step={0.01}
-                value={params.fraisGestionGSM}
-                onChange={e => setParams(p => ({ ...p, fraisGestionGSM: Number(e.target.value) }))}
-                className="w-full"
-              />
-            </label>
-          )}
+        <div>
+          <Label htmlFor="versementInitial">Versement initial (€)</Label>
+          <Input
+            type="number"
+            id="versementInitial"
+            min={0}
+            value={params.versementInitial}
+            onChange={(e) =>
+              handleChange("versementInitial", parseInt(e.target.value))
+            }
+          />
+        </div>
+        <div>
+          <Label htmlFor="versementMensuel">Versement mensuel (€)</Label>
+          <Input
+            type="number"
+            id="versementMensuel"
+            min={0}
+            value={params.versementMensuel}
+            onChange={(e) =>
+              handleChange("versementMensuel", parseInt(e.target.value))
+            }
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="rendementEuros">Rendement Fonds € (%)</Label>
+          <Input
+            type="number"
+            id="rendementEuros"
+            min={0}
+            max={10}
+            step={0.1}
+            value={params.rendementEuros}
+            onChange={(e) =>
+              handleChange("rendementEuros", parseFloat(e.target.value))
+            }
+          />
+        </div>
+        <div>
+          <Label htmlFor="rendementUC">Rendement UC (%)</Label>
+          <Input
+            type="number"
+            id="rendementUC"
+            min={0}
+            max={20}
+            step={0.1}
+            value={params.rendementUC}
+            onChange={(e) => handleChange("rendementUC", parseFloat(e.target.value))}
+          />
+        </div>
+        <div>
+          <Label htmlFor="rendementGSM">Rendement GSM (%)</Label>
+          <Input
+            type="number"
+            id="rendementGSM"
+            min={0}
+            max={20}
+            step={0.1}
+            value={params.rendementGSM}
+            onChange={(e) => handleChange("rendementGSM", parseFloat(e.target.value))}
+          />
+        </div>
+
+        <div className="col-span-2">
+          <Label htmlFor="pctUC">Répartition UC (%)</Label>
+          <Slider
+            id="pctUC"
+            defaultValue={[params.pctUC]}
+            max={100}
+            step={5}
+            onValueChange={(value) => handleChange("pctUC", value[0])}
+          />
+          <p className="text-sm text-muted-foreground mt-1">
+            {params.pctUC}% en Unités de Compte (UC)
+          </p>
+        </div>
+        <div className="col-span-2">
+          <Label htmlFor="pctGSM">Répartition GSM (%)</Label>
+          <Slider
+            id="pctGSM"
+            defaultValue={[params.pctGSM]}
+            max={100}
+            step={5}
+            onValueChange={(value) => handleChange("pctGSM", value[0])}
+          />
+          <p className="text-sm text-muted-foreground mt-1">
+            {params.pctGSM}% en Gestion Sous Mandat (GSM)
+          </p>
+        </div>
+
+        <Separator className="col-span-2" />
+
+        <div>
+          <Label htmlFor="fraisGestionEuros">Frais gestion € (%)</Label>
+          <Input
+            type="number"
+            id="fraisGestionEuros"
+            min={0}
+            max={5}
+            step={0.1}
+            value={params.fraisGestionEuros}
+            onChange={(e) =>
+              handleChange("fraisGestionEuros", parseFloat(e.target.value))
+            }
+          />
+        </div>
+        <div>
+          <Label htmlFor="fraisGestionUC">Frais gestion UC (%)</Label>
+          <Input
+            type="number"
+            id="fraisGestionUC"
+            min={0}
+            max={5}
+            step={0.1}
+            value={params.fraisGestionUC}
+            onChange={(e) =>
+              handleChange("fraisGestionUC", parseFloat(e.target.value))
+            }
+          />
+        </div>
+        <div>
+          <Label htmlFor="fraisGestionGSM">Frais gestion GSM (%)</Label>
+          <Input
+            type="number"
+            id="fraisGestionGSM"
+            min={0}
+            max={5}
+            step={0.1}
+            value={params.fraisGestionGSM}
+            onChange={(e) =>
+              handleChange("fraisGestionGSM", parseFloat(e.target.value))
+            }
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="fraisEntree">Frais d'entrée (%)</Label>
+          <Input
+            type="number"
+            id="fraisEntree"
+            min={0}
+            max={5}
+            step={0.1}
+            value={params.fraisEntree}
+            onChange={(e) =>
+              handleChange("fraisEntree", parseFloat(e.target.value))
+            }
+          />
+        </div>
+        <div>
+          <Label htmlFor="fraisArbitrage">Frais d'arbitrage (%)</Label>
+          <Input
+            type="number"
+            id="fraisArbitrage"
+            min={0}
+            max={5}
+            step={0.1}
+            value={params.fraisArbitrage}
+            onChange={(e) =>
+              handleChange("fraisArbitrage", parseFloat(e.target.value))
+            }
+          />
+        </div>
+        <div className="col-span-2 flex gap-4 mt-4">
+          <Button
+            type="submit"
+            disabled={!ready}
+            className=""
+            variant="default"
+          >
+            Calculer
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleReset}
+          >
+            Réinitialiser
+          </Button>
         </div>
       </form>
+      {/* Aide, infos */}
+      {showResults && ready && (
+        <>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={chartData}
+                margin={{
+                  top: 10,
+                  right: 30,
+                  left: 0,
+                  bottom: 0,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="mois" />
+                <YAxis tickFormatter={montantFormat} />
+                <Tooltip formatter={(value: number) => [montantFormat(value), "Capital"]} />
+                <Area
+                  type="monotone"
+                  dataKey="Sans Frais"
+                  stroke="#82ca9d"
+                  fill="#82ca9d"
+                  name="Sans Frais"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="Avec Frais"
+                  stroke="#8884d8"
+                  fill="#8884d8"
+                  name="Avec Frais"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
 
-      <div className="mb-6 flex flex-wrap justify-between items-center gap-6 bg-muted/70 rounded-xl px-6 py-4">
-        <div>
-          <span className="block text-muted-foreground text-xs mb-1">Capital net simulé avec frais</span>
-          <span className="text-xl font-semibold text-primary">{currencyFormat(capitalNetAvecFrais)}</span>
-        </div>
-        <div>
-          <span className="block text-muted-foreground text-xs mb-1">Capital net simulé sans frais</span>
-          <span className="text-xl font-semibold">{currencyFormat(capitalNetSansFrais)}</span>
-        </div>
-        <div>
-          <span className="block text-muted-foreground text-xs mb-1">Impact cumulé des frais</span>
-          <span className="text-xl font-semibold text-destructive">{currencyFormat(impactFrais)}</span>
-        </div>
-      </div>
-      <div className="bg-background p-4 rounded-xl shadow-md">
-        <h3 className="font-bold text-lg mb-2">Projection sur durée totale</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={dataAvecFrais.map((row, i) => ({
-            annee: row.annee,
-            "Avec frais": row.capital,
-            "Sans frais": dataSansFrais[i]?.capital ?? row.capital
-          }))}>
-            <defs>
-              <linearGradient id="colorFrais" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#2563eb" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
-              </linearGradient>
-              <linearGradient id="colorSansFrais" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#75e4cb" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="#75e4cb" stopOpacity={0}/>
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="annee" tickFormatter={v => `${v} ans`}/>
-            <YAxis tickFormatter={currencyFormat}/>
-            <CartesianGrid strokeDasharray="3 3" />
-            <Tooltip formatter={(val: number) => currencyFormat(val)} />
-            <Legend />
-            <Area type="monotone" dataKey="Avec frais" stroke="#2563eb" fill="url(#colorFrais)" />
-            <Area type="monotone" dataKey="Sans frais" stroke="#75e4cb" fill="url(#colorSansFrais)" />
-          </AreaChart>
-        </ResponsiveContainer>
-        <span className="block text-xs text-muted-foreground mt-2">Évolution du capital brut et net, dans le temps</span>
-      </div>
-      <div className="mt-6 text-sm text-muted-foreground">
-        <span className="">
-          <strong>NB :</strong> Les performances passées ne préjugent pas des performances futures. Le simulateur est un outil pédagogique, non un conseil en investissement.
-        </span>
-      </div>
+          <div className="mt-6 p-4 rounded-md bg-muted">
+            <h3 className="text-lg font-semibold mb-2">Résultats</h3>
+            {resultats && (
+              <>
+                <p>
+                  Capital final sans frais :{" "}
+                  {formatMontant(resultats.capitalSansFrais)}
+                </p>
+                <p>
+                  Capital final avec frais : {formatMontant(resultats.capitalAvecFrais)}
+                </p>
+                <p className="font-semibold text-primary">
+                  Différence due aux frais : {formatMontant(resultats.difference)}
+                </p>
+              </>
+            )}
+          </div>
+
+          <div className="mt-6 p-4 rounded-md bg-muted">
+            <h3 className="text-lg font-semibold mb-2">Pédagogie</h3>
+            <p>
+              Les frais, bien que faibles en apparence, ont un impact significatif
+              sur le long terme.
+            </p>
+            <p>
+              Ce simulateur vous permet de visualiser l'érosion de votre capital due
+              aux différents types de frais.
+            </p>
+          </div>
+        </>
+      )}
+      {/* Info bas de page */}
     </div>
   );
 };
