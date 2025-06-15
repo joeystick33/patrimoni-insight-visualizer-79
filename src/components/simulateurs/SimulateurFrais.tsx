@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from "react";
 import {
   AreaChart,
@@ -77,74 +76,106 @@ const SimulateurFrais = () => {
     setError("");
   };
 
-  // AMÉLIORATION : Calcul plus précis avec frais sur versements et d'arbitrage
+  // AMÉLIORATION : Calcul plus précis avec frais sur versements et frais de gestion par support
   function calcSimu(withFees: boolean) {
-    let capital = params.versementInitial;
+    let capitalEuros = 0;
+    let capitalUC = 0;
+    let capitalGSM = 0;
     let data = [];
     let totalFraisSurVersement = 0;
     let totalFraisGestion = 0;
     let totalFraisArbitrage = 0;
 
+    // Répartition du versement initial par support
+    const pctEuros = (100 - params.pctUC - params.pctGSM) / 100;
+    const pctUC = params.pctUC / 100;
+    const pctGSM = params.pctGSM / 100;
+
+    let versementInitialNet = params.versementInitial;
+    
     // Frais sur versement initial
     if (withFees) {
       const fraisSurVersementInitial = params.versementInitial * (params.fraisSurVersement / 100);
-      capital -= fraisSurVersementInitial;
+      versementInitialNet -= fraisSurVersementInitial;
       totalFraisSurVersement += fraisSurVersementInitial;
     }
 
+    // Répartition initiale
+    capitalEuros = versementInitialNet * pctEuros;
+    capitalUC = versementInitialNet * pctUC;
+    capitalGSM = versementInitialNet * pctGSM;
+
     for (let mois = 1; mois <= params.duree * 12; mois++) {
-      // Calcul des rendements mensuels
+      // Calcul des rendements mensuels par support
       const rendementEurosMensuel = params.rendementEuros / 100 / 12;
       const rendementUCMensuel = params.rendementUC / 100 / 12;
       const rendementGSMMensuel = params.rendementGSM / 100 / 12;
 
-      // Répartition du capital
-      const pctEuros = (100 - params.pctUC - params.pctGSM) / 100;
-      const pctUC = params.pctUC / 100;
-      const pctGSM = params.pctGSM / 100;
+      // Application des rendements sur chaque support
+      const interetsEuros = capitalEuros * rendementEurosMensuel;
+      const interetsUC = capitalUC * rendementUCMensuel;
+      const interetsGSM = capitalGSM * rendementGSMMensuel;
 
-      // Application des rendements
-      const interetsEuros = capital * pctEuros * rendementEurosMensuel;
-      const interetsUC = capital * pctUC * rendementUCMensuel;
-      const interetsGSM = capital * pctGSM * rendementGSMMensuel;
+      capitalEuros += interetsEuros;
+      capitalUC += interetsUC;
+      capitalGSM += interetsGSM;
 
-      capital += interetsEuros + interetsUC + interetsGSM;
-
-      // Calcul des frais de gestion
+      // Calcul des frais de gestion par support (basés sur l'encours de chaque support)
       if (withFees) {
-        const fraisEuros = capital * pctEuros * (params.fraisGestionEuros / 100 / 12);
-        const fraisUC = capital * pctUC * (params.fraisGestionUC / 100 / 12);
-        const fraisGSM = capital * pctGSM * (params.fraisGestionGSM / 100 / 12);
+        const fraisEuros = capitalEuros * (params.fraisGestionEuros / 100 / 12);
+        const fraisUC = capitalUC * (params.fraisGestionUC / 100 / 12);
+        const fraisGSM = capitalGSM * (params.fraisGestionGSM / 100 / 12);
+        
+        capitalEuros -= fraisEuros;
+        capitalUC -= fraisUC;
+        capitalGSM -= fraisGSM;
         
         const fraisGestionMensuel = fraisEuros + fraisUC + fraisGSM;
-        capital -= fraisGestionMensuel;
         totalFraisGestion += fraisGestionMensuel;
 
-        // Frais d'arbitrage (si applicable)
+        // Frais d'arbitrage (calculés sur le capital total une fois par an)
         if (mois % 12 === 0 && params.nbArbitragesParAn > 0) {
-          const fraisArbitrageMensuel = capital * (params.fraisArbitrage / 100) * params.nbArbitragesParAn;
-          capital -= fraisArbitrageMensuel;
+          const capitalTotal = capitalEuros + capitalUC + capitalGSM;
+          const fraisArbitrageMensuel = capitalTotal * (params.fraisArbitrage / 100) * params.nbArbitragesParAn;
+          
+          // Répartition proportionnelle des frais d'arbitrage
+          const fraisArbitrageEuros = fraisArbitrageMensuel * (capitalEuros / capitalTotal);
+          const fraisArbitrageUC = fraisArbitrageMensuel * (capitalUC / capitalTotal);
+          const fraisArbitrageGSM = fraisArbitrageMensuel * (capitalGSM / capitalTotal);
+          
+          capitalEuros -= fraisArbitrageEuros;
+          capitalUC -= fraisArbitrageUC;
+          capitalGSM -= fraisArbitrageGSM;
+          
           totalFraisArbitrage += fraisArbitrageMensuel;
         }
       }
 
       // Versement mensuel
       if (params.versementMensuel > 0) {
-        let versement = params.versementMensuel;
+        let versementMensuelNet = params.versementMensuel;
         
         // Frais sur versements mensuels
         if (withFees) {
-          const fraisSurVersementMensuel = versement * (params.fraisSurVersement / 100);
-          versement -= fraisSurVersementMensuel;
+          const fraisSurVersementMensuel = versementMensuelNet * (params.fraisSurVersement / 100);
+          versementMensuelNet -= fraisSurVersementMensuel;
           totalFraisSurVersement += fraisSurVersementMensuel;
         }
         
-        capital += versement;
+        // Répartition du versement mensuel selon l'allocation
+        capitalEuros += versementMensuelNet * pctEuros;
+        capitalUC += versementMensuelNet * pctUC;
+        capitalGSM += versementMensuelNet * pctGSM;
       }
 
+      const capitalTotal = capitalEuros + capitalUC + capitalGSM;
+      
       data.push({ 
         mois, 
-        capital,
+        capital: capitalTotal,
+        capitalEuros,
+        capitalUC,
+        capitalGSM,
         totalFraisSurVersement: withFees ? totalFraisSurVersement : 0,
         totalFraisGestion: withFees ? totalFraisGestion : 0,
         totalFraisArbitrage: withFees ? totalFraisArbitrage : 0
