@@ -29,13 +29,15 @@ interface ResultatBeneficiaire {
   impotTotal: number;
   montantNet: number;
   tauxImposition: number;
+  isExonereTepa: boolean; // Nouveau champ pour identifier l'exonération Tepa
 }
 
-// Barèmes des droits de succession selon le lien de parenté - CORRECTION : Barèmes 2024
+// Barèmes des droits de succession selon le lien de parenté - Barèmes 2024
 const baremesSuccession = {
   "conjoint": { 
     abattement: 80724, 
-    taux: [{ seuil: 0, taux: 0 }] // Exonération totale pour conjoints/partenaires PACS
+    taux: [{ seuil: 0, taux: 0 }], // Exonération totale Loi Tepa
+    exonerationTepa: true
   }, 
   "enfant": { 
     abattement: 100000, 
@@ -47,7 +49,8 @@ const baremesSuccession = {
       { seuil: 552324, taux: 0.30 },
       { seuil: 902838, taux: 0.40 },
       { seuil: 1805677, taux: 0.45 }
-    ]
+    ],
+    exonerationTepa: false
   },
   "petit-enfant": { 
     abattement: 1594, 
@@ -59,28 +62,35 @@ const baremesSuccession = {
       { seuil: 552324, taux: 0.30 },
       { seuil: 902838, taux: 0.40 },
       { seuil: 1805677, taux: 0.45 }
-    ]
+    ],
+    exonerationTepa: false
   },
   "frere-soeur": { 
     abattement: 15932, 
     taux: [
       { seuil: 0, taux: 0.35 },
       { seuil: 24430, taux: 0.45 }
-    ]
+    ],
+    exonerationTepa: false
   },
   "neveu-niece": { 
     abattement: 7967, 
-    taux: [{ seuil: 0, taux: 0.55 }]
+    taux: [{ seuil: 0, taux: 0.55 }],
+    exonerationTepa: false
   },
   "autre": { 
     abattement: 1594, 
-    taux: [{ seuil: 0, taux: 0.60 }]
+    taux: [{ seuil: 0, taux: 0.60 }], // Concubins, taux maximal
+    exonerationTepa: false
   }
 };
 
 function calculerImpotSuccession(montant: number, lienParente: string): number {
   const bareme = baremesSuccession[lienParente as keyof typeof baremesSuccession];
   if (!bareme) return montant * 0.60;
+
+  // Exonération totale pour conjoint/PACS (Loi Tepa)
+  if (bareme.exonerationTepa) return 0;
 
   let impot = 0;
   let montantRestant = Math.max(0, montant - bareme.abattement);
@@ -104,7 +114,6 @@ function calculerImpotSuccession(montant: number, lienParente: string): number {
   return impot;
 }
 
-// CORRECTION : Calcul impôt 990 I avec les bons taux 2024
 function calculerImpot990I(montantImposable: number): number {
   if (montantImposable <= 0) return 0;
   if (montantImposable <= 700000) return montantImposable * 0.20;
@@ -112,7 +121,10 @@ function calculerImpot990I(montantImposable: number): number {
 }
 
 export function calculDeces(params: ParametresDeces) {
-  const { valeurContrat, primesAvant70, primesApres70, beneficiaires } = params;
+  const { valeurContrat, primesAvant70, clauseType, beneficiaires } = params;
+  
+  // Gestion automatique des primes après 70 ans (0 par défaut)
+  const primesApres70 = params.primesApres70 || 0;
   
   // Validation des données
   if (valeurContrat <= 0 || primesAvant70 < 0 || primesApres70 < 0) {
@@ -126,15 +138,17 @@ export function calculDeces(params: ParametresDeces) {
   
   // Calcul des produits (plus-values)
   const produits = valeurContrat - totalPrimes;
-  const produitAvant70 = totalPrimes > 0 ? (produits * primesAvant70) / totalPrimes : 0;
+  const produitAvant70 = totalPrimes > 0 ? (produits * primesAvant70) / totalPrimes : produits;
   const produitApres70 = totalPrimes > 0 ? (produits * primesApres70) / totalPrimes : 0;
 
-  // Abattement global article 757 B (30 500 €)
+  // Abattement global article 757 B (30 500 €) - COMMUN à tous les bénéficiaires
   const abattementGlobal757B = 30500;
   let abattementRestant757B = abattementGlobal757B;
 
   const resultats: ResultatBeneficiaire[] = beneficiaires.map(beneficiaire => {
     const quotiteDecimale = beneficiaire.quotite / 100;
+    const bareme = baremesSuccession[beneficiaire.lienParente as keyof typeof baremesSuccession];
+    const isExonereTepa = bareme?.exonerationTepa || false;
     
     // Répartition du montant brut
     const montantBrut = valeurContrat * quotiteDecimale;
@@ -146,24 +160,44 @@ export function calculDeces(params: ParametresDeces) {
     const partAvant70 = partPrimesAvant70 + partProduitAvant70;
     const partApres70 = partPrimesApres70 + partProduitApres70;
 
-    // Article 990 I (primes avant 70 ans + produits)
+    // Article 990 I (primes avant 70 ans + produits) - Abattement individuel
     const abattementAvant70 = Math.min(152500, partAvant70);
     const imposableAvant70 = Math.max(0, partAvant70 - abattementAvant70);
     const impotAvant70 = calculerImpot990I(imposableAvant70);
 
-    // Article 757 B (primes après 70 ans seulement)
+    // Article 757 B (primes après 70 ans seulement) + Réintégration fiscale
     let abattementApres70 = 0;
-    let imposableApres70 = partPrimesApres70;
+    let imposableApres70 = 0;
     let impotApres70 = 0;
 
-    if (abattementRestant757B > 0 && partPrimesApres70 > 0) {
-      abattementApres70 = Math.min(abattementRestant757B, partPrimesApres70);
-      abattementRestant757B -= abattementApres70;
-      imposableApres70 = Math.max(0, partPrimesApres70 - abattementApres70);
+    if (partPrimesApres70 > 0) {
+      // D'abord, application de l'abattement global 757B (30 500€ commun)
+      if (abattementRestant757B > 0) {
+        abattementApres70 = Math.min(abattementRestant757B, partPrimesApres70);
+        abattementRestant757B -= abattementApres70;
+      }
+      
+      // Montant restant après abattement 757B
+      const restantApresAbattement757B = Math.max(0, partPrimesApres70 - abattementApres70);
+      
+      if (restantApresAbattement757B > 0) {
+        // Réintégration dans la succession avec abattement de droit commun
+        // Si conjoint/PACS -> exonération totale (Loi Tepa)
+        if (isExonereTepa) {
+          impotApres70 = 0;
+          imposableApres70 = 0;
+        } else {
+          // Pour les autres : application des abattements et barèmes de droit commun
+          imposableApres70 = restantApresAbattement757B;
+          impotApres70 = calculerImpotSuccession(restantApresAbattement757B, beneficiaire.lienParente);
+        }
+      }
     }
 
-    if (imposableApres70 > 0) {
-      impotApres70 = calculerImpotSuccession(imposableApres70, beneficiaire.lienParente);
+    // Les produits après 70 ans suivent la même logique que les primes après 70 ans
+    if (partProduitApres70 > 0 && !isExonereTepa) {
+      impotApres70 += calculerImpotSuccession(partProduitApres70, beneficiaire.lienParente);
+      imposableApres70 += partProduitApres70;
     }
 
     const impotTotal = impotAvant70 + impotApres70;
@@ -184,7 +218,8 @@ export function calculDeces(params: ParametresDeces) {
       impotApres70,
       impotTotal,
       montantNet,
-      tauxImposition
+      tauxImposition,
+      isExonereTepa
     };
   });
 
@@ -194,12 +229,20 @@ export function calculDeces(params: ParametresDeces) {
   const totalNet = resultats.reduce((sum, r) => sum + r.montantNet, 0);
   const tauxImpositionGlobal = totalTransmis > 0 ? (totalImpots / totalTransmis) * 100 : 0;
 
-  // AMÉLIORATION : Conseils d'optimisation plus précis
+  // Conseils d'optimisation améliorés
   const optimisations: string[] = [];
   const alertes: string[] = [];
 
-  // Vérification des abattements non utilisés
-  const beneficiairesAbattementNonUtilise = resultats.filter(r => r.abattementAvant70 < 152500);
+  // Conseils spécifiques selon les bénéficiaires
+  const beneficiairesExoneres = resultats.filter(r => r.isExonereTepa);
+  const beneficiairesImposables = resultats.filter(r => !r.isExonereTepa);
+
+  if (beneficiairesExoneres.length > 0) {
+    optimisations.push(`${beneficiairesExoneres.length} bénéficiaire(s) totalement exonéré(s) grâce à la loi Tepa (conjoint/PACS).`);
+  }
+
+  // Vérification des abattements non utilisés (990 I)
+  const beneficiairesAbattementNonUtilise = resultats.filter(r => r.abattementAvant70 < 152500 && r.partAvant70 > 0);
   if (beneficiairesAbattementNonUtilise.length > 0) {
     optimisations.push(`${beneficiairesAbattementNonUtilise.length} bénéficiaire(s) n'utilisent pas la totalité de leur abattement 990 I (152 500 €). Considérez une répartition plus équitable.`);
   }
@@ -207,7 +250,13 @@ export function calculDeces(params: ParametresDeces) {
   // Optimisation versements après 70 ans
   if (primesApres70 > abattementGlobal757B) {
     const exces = primesApres70 - abattementGlobal757B;
-    optimisations.push(`Les primes après 70 ans (${primesApres70.toLocaleString()} €) dépassent l'abattement global de ${abattementGlobal757B.toLocaleString()} € de ${exces.toLocaleString()} €. Privilégiez les versements avant 70 ans.`);
+    alertes.push(`Les primes après 70 ans (${primesApres70.toLocaleString()} €) dépassent l'abattement global de ${abattementGlobal757B.toLocaleString()} € de ${exces.toLocaleString()} €. Privilégiez les versements avant 70 ans.`);
+  }
+
+  // Alerte sur les concubins
+  const concubins = resultats.filter(r => r.lienParente === "autre");
+  if (concubins.length > 0) {
+    alertes.push(`⚠️ ATTENTION : Les concubins (sans lien juridique) subissent un taux d'imposition de 60% sans exonération Tepa. Considérez le PACS ou le mariage.`);
   }
 
   // Alerte taux d'imposition élevé
@@ -215,13 +264,8 @@ export function calculDeces(params: ParametresDeces) {
     alertes.push(`Taux d'imposition global élevé (${tauxImpositionGlobal.toFixed(1)}%). Envisagez des stratégies d'optimisation : démembrement, assurances croisées, donations, etc.`);
   }
 
-  // Alerte bénéficiaire unique avec forte imposition
-  if (beneficiaires.length === 1 && resultats[0].tauxImposition > 15) {
-    optimisations.push("Avec un seul bénéficiaire, considérez la nomination de bénéficiaires multiples pour diluer l'imposition et utiliser plusieurs abattements.");
-  }
-
-  // Conseil clause standard
-  if (params.clauseType === "standard") {
+  // Conseil clause standard vs personnalisée
+  if (clauseType === "standard") {
     if (beneficiaires.some(b => b.lienParente === "conjoint")) {
       alertes.push("Avec une clause standard et un conjoint, vérifiez la situation en cas de famille recomposée (enfants d'un premier lit).");
     }

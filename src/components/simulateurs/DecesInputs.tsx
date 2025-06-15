@@ -25,12 +25,12 @@ interface DecesInputsProps {
 }
 
 const liensParente = [
-  { value: "conjoint", label: "Conjoint/Partenaire PACS" },
-  { value: "enfant", label: "Enfant" },
-  { value: "petit-enfant", label: "Petit-enfant" },
-  { value: "frere-soeur", label: "Frère/Sœur" },
-  { value: "neveu-niece", label: "Neveu/Nièce" },
-  { value: "autre", label: "Autre" },
+  { value: "conjoint", label: "Conjoint marié ou partenaire PACS (Exonération Tepa)", subtitle: "Totalement exonéré de droits de succession" },
+  { value: "enfant", label: "Enfant", subtitle: "Abattement 100 000 € en droits de succession" },
+  { value: "petit-enfant", label: "Petit-enfant", subtitle: "Abattement 1 594 € en droits de succession" },
+  { value: "frere-soeur", label = "Frère/Sœur", subtitle: "Abattement 15 932 € en droits de succession" },
+  { value: "neveu-niece", label: "Neveu/Nièce", subtitle: "Abattement 7 967 € en droits de succession" },
+  { value: "autre", label: "Concubin/Autre (sans lien)", subtitle: "Abattement minimal 1 594 € - Taux maximal 60%" },
 ];
 
 const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
@@ -58,6 +58,13 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
   };
 
   const totalQuotite = values.beneficiaires.reduce((sum, b) => sum + parseFloat(b.quotite || "0"), 0);
+
+  // Gestion automatique des valeurs par défaut
+  const handlePrimesApres70Change = (value: string) => {
+    // Si vide, on met automatiquement 0
+    const finalValue = value === "" ? "0" : value;
+    onChange("primesApres70", finalValue);
+  };
 
   return (
     <div className="space-y-6">
@@ -97,13 +104,16 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
             />
           </div>
           <div>
-            <Label htmlFor="primesApres70">Total des primes versées après 70 ans (€)</Label>
+            <Label htmlFor="primesApres70">
+              Total des primes versées après 70 ans (€)
+              <span className="text-sm text-muted-foreground ml-2">(Laissez vide = 0€)</span>
+            </Label>
             <Input
               id="primesApres70"
               type="number"
               value={values.primesApres70}
-              onChange={(e) => onChange("primesApres70", e.target.value)}
-              placeholder="Ex: 50000"
+              onChange={(e) => handlePrimesApres70Change(e.target.value)}
+              placeholder="Ex: 50000 (ou laissez vide pour 0€)"
             />
           </div>
         </CardContent>
@@ -161,7 +171,7 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                       />
                     </div>
                     <div>
-                      <Label htmlFor={`lien-${index}`}>Lien de parenté</Label>
+                      <Label htmlFor={`lien-${index}`}>Lien de parenté / Statut fiscal</Label>
                       <select
                         id={`lien-${index}`}
                         value={beneficiaire.lienParente}
@@ -169,9 +179,14 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       >
                         {liensParente.map(lien => (
-                          <option key={lien.value} value={lien.value}>{lien.label}</option>
+                          <option key={lien.value} value={lien.value} title={lien.subtitle}>
+                            {lien.label}
+                          </option>
                         ))}
                       </select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {liensParente.find(l => l.value === beneficiaire.lienParente)?.subtitle}
+                      </p>
                     </div>
                     <div>
                       <Label htmlFor={`age-${index}`}>Âge</Label>

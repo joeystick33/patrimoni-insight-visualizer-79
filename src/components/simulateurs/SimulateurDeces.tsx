@@ -41,10 +41,11 @@ const SimulateurDeces: React.FC = () => {
   };
 
   // Vérification si tous les champs requis sont remplis
+  // Gestion automatique : primesApres70 peut être vide (= 0)
   const ready = 
     !!values.valeurContrat &&
     !!values.primesAvant70 &&
-    !!values.primesApres70 &&
+    // primesApres70 peut être vide (sera traité comme 0)
     values.beneficiaires.every(b => 
       b.nom && b.lienParente && b.age && b.quotite
     ) &&
@@ -56,7 +57,7 @@ const SimulateurDeces: React.FC = () => {
       resultats = calculDeces({
         valeurContrat: parseFloat(values.valeurContrat),
         primesAvant70: parseFloat(values.primesAvant70),
-        primesApres70: parseFloat(values.primesApres70),
+        primesApres70: parseFloat(values.primesApres70 || "0"), // Valeur par défaut 0
         clauseType: values.clauseType,
         beneficiaires: values.beneficiaires.map(b => ({
           ...b,
@@ -78,7 +79,7 @@ const SimulateurDeces: React.FC = () => {
     <div className="w-full max-w-4xl mx-auto bg-card rounded-xl shadow-xl p-8 animate-fade-in">
       <h2 className="text-2xl font-bold mb-4 text-primary">🎯 Simulation de décès</h2>
       <p className="text-muted-foreground mb-6">
-        Calculez la fiscalité de la transmission et optimisez la répartition entre bénéficiaires selon les articles 990 I et 757 B du CGI.
+        Calculez la fiscalité de la transmission selon la loi Tepa et optimisez la répartition entre bénéficiaires selon les articles 990 I et 757 B du CGI.
       </p>
       
       <form className="space-y-6" autoComplete="off" onSubmit={handleSubmit}>
