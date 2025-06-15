@@ -46,22 +46,22 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
     onChange("beneficiaires", newBeneficiaires);
   };
 
-  const handleUsufruitierChange = (index: number, field: string, value: string) => {
-    const newBeneficiaires = [...values.beneficiaires];
-    newBeneficiaires[index] = {
-      ...newBeneficiaires[index],
+  const handleUsufruitierChange = (field: string, value: string) => {
+    // Pour les clauses démembrées, l'usufruitier est commun à tous les bénéficiaires
+    const newBeneficiaires = values.beneficiaires.map(b => ({
+      ...b,
       usufruitier: {
-        ...newBeneficiaires[index].usufruitier,
+        ...b.usufruitier,
         [field]: value
       }
-    };
+    }));
     onChange("beneficiaires", newBeneficiaires);
   };
 
   const createBeneficiaireTemplate = (typeClause: "pleine-propriete" | "usufruit" | "nue-propriete") => {
     const baseBeneficiaire = {
       nom: "",
-      lienParente: "enfant" as const,
+      lienParente: typeClause === "usufruit" ? "conjoint" as const : "enfant" as const,
       age: "",
       quotite: "0",
       typeClause
@@ -71,7 +71,7 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
     if (values.clauseType === "demembree") {
       return {
         ...baseBeneficiaire,
-        usufruitier: {
+        usufruitier: values.beneficiaires[0]?.usufruitier || {
           nom: "",
           age: "",
           lienParente: "conjoint" as const
@@ -123,8 +123,21 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
         typeClause: "pleine-propriete" as const
       }];
     } else if (newClauseType === "demembree") {
-      newBeneficiaires = [createBeneficiaireTemplate("usufruit")];
-      newBeneficiaires[0].quotite = "100";
+      // Créer l'usufruitier par défaut
+      const usufruitierDefaut = {
+        nom: "",
+        age: "",
+        lienParente: "conjoint" as const
+      };
+      
+      newBeneficiaires = [{
+        nom: "",
+        lienParente: "conjoint" as const,
+        age: "",
+        quotite: "100",
+        typeClause: "usufruit" as const,
+        usufruitier: usufruitierDefaut
+      }];
     } else {
       newBeneficiaires = [createBeneficiaireTemplate("pleine-propriete")];
       newBeneficiaires[0].quotite = "100";
@@ -133,6 +146,9 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
     onChange("clauseType", newClauseType);
     onChange("beneficiaires", newBeneficiaires);
   };
+
+  // Vérifier s'il y a au moins un usufruitier pour les clauses démembrées
+  const hasUsufruitier = values.beneficiaires.some(b => b.typeClause === "usufruit");
 
   return (
     <div className="space-y-6">
@@ -238,11 +254,57 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
             </div>
           )}
 
+          {/* Informations de l'usufruitier de référence - uniquement pour les clauses démembrées */}
+          {values.clauseType === "demembree" && (
+            <Card className="bg-amber-50 border-amber-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-amber-800">
+                  📊 Usufruitier de référence (détermine la répartition)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <Label>Nom de l'usufruitier</Label>
+                    <Input
+                      value={values.beneficiaires[0]?.usufruitier?.nom || ""}
+                      onChange={(e) => handleUsufruitierChange("nom", e.target.value)}
+                      placeholder="Ex: Jean Dupont"
+                    />
+                  </div>
+                  <div>
+                    <Label>Âge de l'usufruitier</Label>
+                    <Input
+                      type="number"
+                      value={values.beneficiaires[0]?.usufruitier?.age || ""}
+                      onChange={(e) => handleUsufruitierChange("age", e.target.value)}
+                      placeholder="Ex: 65"
+                    />
+                  </div>
+                  <div>
+                    <Label>Lien de parenté usufruitier</Label>
+                    <select
+                      value={values.beneficiaires[0]?.usufruitier?.lienParente || "conjoint"}
+                      onChange={(e) => handleUsufruitierChange("lienParente", e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      {liensParente.map(lien => (
+                        <option key={lien.value} value={lien.value}>
+                          {lien.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {(values.clauseType === "personnalisee" || values.clauseType === "demembree") && (
             <div className="space-y-4">
               <div className="flex justify-between items-center flex-wrap gap-2">
                 <h4 className="font-semibold">
-                  {values.clauseType === "demembree" ? "Usufruitier et Nu-propriétaires" : "Bénéficiaires"}
+                  {values.clauseType === "demembree" ? "Usufruitiers et Nu-propriétaires" : "Bénéficiaires"}
                 </h4>
                 <div className="flex gap-2">
                   {values.clauseType === "demembree" ? (
@@ -272,48 +334,6 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                       <span className="text-sm font-medium">
                         {beneficiaire.typeClause === "usufruit" ? "👤 Usufruitier" : "🏠 Nu-propriétaire"}
                       </span>
-                    </div>
-                  )}
-
-                  {/* Informations de l'usufruitier pour déterminer la répartition */}
-                  {values.clauseType === "demembree" && beneficiaire.usufruitier && (
-                    <div className="mb-4 p-3 bg-amber-50 rounded-lg">
-                      <h5 className="font-medium mb-2 text-amber-800">
-                        📊 Usufruitier de référence (détermine la répartition)
-                      </h5>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div>
-                          <Label>Nom de l'usufruitier</Label>
-                          <Input
-                            value={beneficiaire.usufruitier.nom}
-                            onChange={(e) => handleUsufruitierChange(index, "nom", e.target.value)}
-                            placeholder="Ex: Jean Dupont"
-                          />
-                        </div>
-                        <div>
-                          <Label>Âge de l'usufruitier</Label>
-                          <Input
-                            type="number"
-                            value={beneficiaire.usufruitier.age}
-                            onChange={(e) => handleUsufruitierChange(index, "age", e.target.value)}
-                            placeholder="Ex: 65"
-                          />
-                        </div>
-                        <div>
-                          <Label>Lien de parenté usufruitier</Label>
-                          <select
-                            value={beneficiaire.usufruitier.lienParente}
-                            onChange={(e) => handleUsufruitierChange(index, "lienParente", e.target.value)}
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          >
-                            {liensParente.map(lien => (
-                              <option key={lien.value} value={lien.value}>
-                                {lien.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
                     </div>
                   )}
 
