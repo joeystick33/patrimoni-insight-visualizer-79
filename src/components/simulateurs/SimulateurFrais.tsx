@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Area, AreaChart } from "recharts";
 import { Input } from "@/components/ui/input";
@@ -14,7 +13,7 @@ const supports = [
 const defaultParams = {
   duree: 15,
   versementInitial: 10000,
-  versementProgramme: 300,
+  versementMensuel: 300,
   support: "fonds_euros" as Supports,
   repartition: 70,
   rendementEuros: 2.2,
@@ -31,7 +30,7 @@ function currencyFormat(val: number) {
 }
 
 function percentFormat(val: number) {
-  return `${val.toFixed(2)} %`;
+  return `${val.toFixed(2)} %`;
 }
 
 const SimulateurFrais = () => {
@@ -71,19 +70,21 @@ const SimulateurFrais = () => {
       pctGSM = otherPct / 100;
     }
 
-    let versement = params.versementInitial * (1 - (withFees ? params.fraisEntree / 100 : 0));
-    let capitalCurrent = versement;
+    // Versement initial avec frais d'entrée
+    let capitalCurrent = params.versementInitial * (1 - (withFees ? params.fraisEntree / 100 : 0));
+
+    // Taux de rendement mensuel composite
+    const tauxMensuelComposite = (pctEuros * tauxEuros + pctUC * tauxUC + pctGSM * tauxGSM) / 100 / 12;
+    
+    // Versement mensuel net après frais d'entrée
+    const versementMensuelNet = params.versementMensuel * (1 - (withFees ? params.fraisEntree / 100 : 0));
 
     for (let i = 1; i <= params.duree; i++) {
-      capitalCurrent *=
-        1 +
-        (pctEuros * tauxEuros +
-          pctUC * tauxUC +
-          pctGSM * tauxGSM) /
-          100;
-
-      // On ajoute le versement programmé (à la fin de chaque année)
-      capitalCurrent += params.versementProgramme * (1 - (withFees ? params.fraisEntree / 100 : 0));
+      // Application des intérêts mensuels et ajout des versements mensuels
+      for (let mois = 0; mois < 12; mois++) {
+        capitalCurrent = capitalCurrent * (1 + tauxMensuelComposite) + versementMensuelNet;
+      }
+      
       data.push({
         annee: i,
         capital: capitalCurrent,
@@ -103,7 +104,7 @@ const SimulateurFrais = () => {
     <div className="w-full max-w-3xl mx-auto bg-card rounded-xl shadow-xl p-8 animate-fade-in">
       <h2 className="text-2xl font-bold mb-2 text-primary">Impact des frais sur votre assurance vie</h2>
       <p className="text-muted-foreground mb-6 font-medium">
-        Comparez le capital simulé avec et sans frais, visualisez l’érosion à long terme, personnalisez tous les paramètres selon votre contrat.
+        Comparez le capital simulé avec et sans frais, visualisez l'érosion à long terme, personnalisez tous les paramètres selon votre contrat.
       </p>
       <form
         className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6"
@@ -135,13 +136,13 @@ const SimulateurFrais = () => {
             />
           </label>
           <label className="font-semibold block">
-            Versement programmé annuel (€)
+            Versement mensuel (€)
             <Input
               type="number"
               min={0}
-              step={100}
-              value={params.versementProgramme}
-              onChange={e => setParams(p => ({ ...p, versementProgramme: Number(e.target.value) }))}
+              step={50}
+              value={params.versementMensuel}
+              onChange={e => setParams(p => ({ ...p, versementMensuel: Number(e.target.value) }))}
               className="w-full"
             />
           </label>
@@ -219,7 +220,7 @@ const SimulateurFrais = () => {
             </label>
           )}
           <label className="font-semibold block">
-            Frais d’entrée (% sur chaque versement)
+            Frais d'entrée (% sur chaque versement)
             <Input
               type="number"
               min={0}
@@ -318,7 +319,7 @@ const SimulateurFrais = () => {
       </div>
       <div className="mt-6 text-sm text-muted-foreground">
         <span className="">
-          <strong>NB :</strong> Les performances passées ne préjugent pas des performances futures. Le simulateur est un outil pédagogique, non un conseil en investissement.
+          <strong>NB :</strong> Les performances passées ne préjugent pas des performances futures. Le simulateur est un outil pédagogique, non un conseil en investissement.
         </span>
       </div>
     </div>
