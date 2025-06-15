@@ -9,13 +9,14 @@ const initialValues = {
   valeurContrat: "",
   primesAvant70: "",
   primesApres70: "",
-  clauseType: "standard" as "standard" | "personnalisee",
+  clauseType: "standard" as "standard" | "personnalisee" | "demembree",
   beneficiaires: [
     {
       nom: "",
       lienParente: "conjoint" as "conjoint" | "enfant" | "petit-enfant" | "frere-soeur" | "neveu-niece" | "autre",
       age: "",
-      quotite: "100"
+      quotite: "100",
+      typeClause: "pleine-propriete" as "pleine-propriete" | "usufruit" | "nue-propriete"
     }
   ]
 };
@@ -41,14 +42,22 @@ const SimulateurDeces: React.FC = () => {
   };
 
   // Vérification si tous les champs requis sont remplis
-  // Gestion automatique : primesApres70 peut être vide (= 0)
   const ready = 
     !!values.valeurContrat &&
     !!values.primesAvant70 &&
-    // primesApres70 peut être vide (sera traité comme 0)
-    values.beneficiaires.every(b => 
-      b.nom && b.lienParente && b.age && b.quotite
-    ) &&
+    values.beneficiaires.every(b => {
+      const basicFields = b.nom && b.lienParente && b.age && b.quotite;
+      
+      // Vérification spécifique pour les clauses démembrées
+      if (b.typeClause === "usufruit" || b.typeClause === "nue-propriete") {
+        return basicFields && 
+               b.usufruitier?.nom && 
+               b.usufruitier?.age && 
+               b.usufruitier?.lienParente;
+      }
+      
+      return basicFields;
+    }) &&
     values.beneficiaires.reduce((sum, b) => sum + parseFloat(b.quotite || "0"), 0) === 100;
 
   let resultats;
@@ -57,12 +66,16 @@ const SimulateurDeces: React.FC = () => {
       resultats = calculDeces({
         valeurContrat: parseFloat(values.valeurContrat),
         primesAvant70: parseFloat(values.primesAvant70),
-        primesApres70: parseFloat(values.primesApres70 || "0"), // Valeur par défaut 0
+        primesApres70: parseFloat(values.primesApres70 || "0"),
         clauseType: values.clauseType,
         beneficiaires: values.beneficiaires.map(b => ({
           ...b,
           age: parseFloat(b.age),
-          quotite: parseFloat(b.quotite)
+          quotite: parseFloat(b.quotite),
+          usufruitier: b.usufruitier ? {
+            ...b.usufruitier,
+            age: parseFloat(b.usufruitier.age)
+          } : undefined
         }))
       });
     } catch (err) {
@@ -79,7 +92,8 @@ const SimulateurDeces: React.FC = () => {
     <div className="w-full max-w-4xl mx-auto bg-card rounded-xl shadow-xl p-8 animate-fade-in">
       <h2 className="text-2xl font-bold mb-4 text-primary">🎯 Simulation de décès</h2>
       <p className="text-muted-foreground mb-6">
-        Calculez la fiscalité de la transmission selon la loi Tepa et optimisez la répartition entre bénéficiaires selon les articles 990 I et 757 B du CGI.
+        Calculez la fiscalité de la transmission selon la loi Tepa et optimisez la répartition entre bénéficiaires selon les articles 990 I et 757 B du CGI. 
+        <span className="font-medium"> Nouveau : gestion des clauses démembrées (usufruit/nue-propriété).</span>
       </p>
       
       <form className="space-y-6" autoComplete="off" onSubmit={handleSubmit}>
@@ -105,6 +119,7 @@ const SimulateurDeces: React.FC = () => {
       {!ready && (
         <p className="text-xs text-muted-foreground mt-4">
           Renseignez toutes les valeurs et assurez-vous que la répartition totale des quotités soit égale à 100% pour visualiser les résultats.
+          {values.clauseType === "demembree" && " Pour les clauses démembrées, renseignez également les informations de l'usufruitier."}
         </p>
       )}
       

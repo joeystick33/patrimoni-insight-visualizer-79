@@ -1,16 +1,21 @@
-
 interface Beneficiaire {
   nom: string;
   lienParente: "conjoint" | "enfant" | "petit-enfant" | "frere-soeur" | "neveu-niece" | "autre";
   age: number;
   quotite: number;
+  typeClause?: "pleine-propriete" | "usufruit" | "nue-propriete";
+  usufruitier?: {
+    nom: string;
+    age: number;
+    lienParente: "conjoint" | "enfant" | "petit-enfant" | "frere-soeur" | "neveu-niece" | "autre";
+  };
 }
 
 interface ParametresDeces {
   valeurContrat: number;
   primesAvant70: number;
   primesApres70: number;
-  clauseType: "standard" | "personnalisee";
+  clauseType: "standard" | "personnalisee" | "demembree";
   beneficiaires: Beneficiaire[];
 }
 
@@ -32,6 +37,10 @@ interface ResultatBeneficiaire {
   montantNet: number;
   tauxImposition: number;
   isExonereTepa: boolean;
+  typeClause?: "pleine-propriete" | "usufruit" | "nue-propriete";
+  pourcentageUsufruit?: number;
+  pourcentageNuePropriete?: number;
+  usufruitier?: string;
 }
 
 // Barèmes des droits de succession selon le lien de parenté - Barèmes 2024
@@ -86,6 +95,31 @@ const baremesSuccession = {
     exonerationTepa: false
   }
 };
+
+// Barème de l'usufruit selon l'âge (article 669 du CGI)
+const baremeUsufruit: { [key: string]: number } = {
+  "moins-21": 90,
+  "21-30": 80,
+  "31-40": 70,
+  "41-50": 60,
+  "51-60": 50,
+  "61-70": 40,
+  "71-80": 30,
+  "81-90": 20,
+  "91-plus": 10
+};
+
+function getPourcentageUsufruit(age: number): number {
+  if (age < 21) return 90;
+  if (age <= 30) return 80;
+  if (age <= 40) return 70;
+  if (age <= 50) return 60;
+  if (age <= 60) return 50;
+  if (age <= 70) return 40;
+  if (age <= 80) return 30;
+  if (age <= 90) return 20;
+  return 10;
+}
 
 function calculerImpotSuccession(montant: number, lienParente: string): number {
   const bareme = baremesSuccession[lienParente as keyof typeof baremesSuccession];
@@ -147,6 +181,86 @@ function calculDroits757B(primesApres70: number, quotite: number, lienParente: s
   return baseTaxable * taux;
 }
 
+function calculerFiscaliteBeneficiaire(
+  lienParente: string,
+  nom: string,
+  quotiteDecimale: number,
+  valeurContrat: number,
+  base990I: number,
+  base757B: number,
+  primesApres70: number,
+  abattementGlobal757B: number
+): ResultatBeneficiaire {
+  const bareme = baremesSuccession[lienParente as keyof typeof baremesSuccession];
+  const isExonereTepa = bareme?.exonerationTepa || false;
+  
+  // 4. Pour chaque bénéficiaire, appliquer la quotité
+  const montantBrut = valeurContrat * quotiteDecimale;
+  const partBenef990I = quotiteDecimale * base990I;
+  const partBenef757B = quotiteDecimale * base757B;
+  
+  // 🔹 Régime 990 I (primes versées avant 70 ans + intérêts correspondants)
+  let abattementAvant70 = 0;
+  let imposableAvant70 = 0;
+  let impotAvant70 = 0;
+
+  if (isExonereTepa) {
+    // Conjoint/PACS : exonération totale
+    abattementAvant70 = 0;
+    imposableAvant70 = 0;
+    impotAvant70 = 0;
+  } else {
+    // Abattement individuel : 152 500 € par bénéficiaire
+    abattementAvant70 = Math.min(152500, partBenef990I);
+    imposableAvant70 = Math.max(0, partBenef990I - abattementAvant70);
+    impotAvant70 = calculerImpot990I(imposableAvant70);
+  }
+
+  // 🔹 Régime 757 B (primes versées après 70 ans SEULEMENT - intérêts exonérés)
+  let abattementApres70 = 0;
+  let imposableApres70 = 0;
+  let impotApres70 = 0;
+
+  if (isExonereTepa) {
+    // Conjoint/PACS : exonération totale même sur primes après 70 ans
+    abattementApres70 = 0;
+    imposableApres70 = 0;
+    impotApres70 = 0;
+  } else if (primesApres70 > 0) {
+    // Application de la formule exacte que vous avez fournie
+    impotApres70 = calculDroits757B(primesApres70, quotiteDecimale, lienParente);
+    
+    // Calcul des montants pour l'affichage
+    const baseIndiv = primesApres70 * quotiteDecimale;
+    abattementApres70 = Math.min(abattementGlobal757B * quotiteDecimale, baseIndiv);
+    imposableApres70 = Math.max(0, baseIndiv - abattementApres70);
+  }
+
+  const impotTotal = impotAvant70 + impotApres70;
+  const montantNet = montantBrut - impotTotal;
+  const tauxImposition = montantBrut > 0 ? (impotTotal / montantBrut) * 100 : 0;
+
+  return {
+    nom,
+    lienParente,
+    montantBrut,
+    partAvant70: partBenef990I,
+    partApres70: partBenef757B,
+    base990I: partBenef990I,
+    base757B: partBenef757B,
+    abattementAvant70,
+    abattementApres70,
+    imposableAvant70,
+    imposableApres70,
+    impotAvant70,
+    impotApres70,
+    impotTotal,
+    montantNet,
+    tauxImposition,
+    isExonereTepa
+  };
+}
+
 export function calculDeces(params: ParametresDeces) {
   const { valeurContrat, primesAvant70, clauseType, beneficiaires } = params;
   
@@ -177,76 +291,83 @@ export function calculDeces(params: ParametresDeces) {
   // Abattement global article 757 B (30 500 €) - COMMUN à tous les bénéficiaires
   const abattementGlobal757B = 30500;
 
-  const resultats: ResultatBeneficiaire[] = beneficiaires.map(beneficiaire => {
+  const resultats: ResultatBeneficiaire[] = [];
+
+  beneficiaires.forEach(beneficiaire => {
     const quotiteDecimale = beneficiaire.quotite / 100;
-    const bareme = baremesSuccession[beneficiaire.lienParente as keyof typeof baremesSuccession];
-    const isExonereTepa = bareme?.exonerationTepa || false;
     
-    // 4. Pour chaque bénéficiaire, appliquer la même quotité
-    const montantBrut = valeurContrat * quotiteDecimale;
-    const partBenef990I = quotiteDecimale * base990I;
-    const partBenef757B = quotiteDecimale * base757B;
-    
-    // 🔹 Régime 990 I (primes versées avant 70 ans + intérêts correspondants)
-    let abattementAvant70 = 0;
-    let imposableAvant70 = 0;
-    let impotAvant70 = 0;
-
-    if (isExonereTepa) {
-      // Conjoint/PACS : exonération totale
-      abattementAvant70 = 0;
-      imposableAvant70 = 0;
-      impotAvant70 = 0;
-    } else {
-      // Abattement individuel : 152 500 € par bénéficiaire
-      abattementAvant70 = Math.min(152500, partBenef990I);
-      imposableAvant70 = Math.max(0, partBenef990I - abattementAvant70);
-      impotAvant70 = calculerImpot990I(imposableAvant70);
-    }
-
-    // 🔹 Régime 757 B (primes versées après 70 ans SEULEMENT - intérêts exonérés)
-    let abattementApres70 = 0;
-    let imposableApres70 = 0;
-    let impotApres70 = 0;
-
-    if (isExonereTepa) {
-      // Conjoint/PACS : exonération totale même sur primes après 70 ans
-      abattementApres70 = 0;
-      imposableApres70 = 0;
-      impotApres70 = 0;
-    } else if (primesApres70 > 0) {
-      // Application de la formule exacte que vous avez fournie
-      impotApres70 = calculDroits757B(primesApres70, quotiteDecimale, beneficiaire.lienParente);
+    // Gestion du démembrement
+    if (beneficiaire.typeClause === "usufruit" || beneficiaire.typeClause === "nue-propriete") {
+      if (!beneficiaire.usufruitier) {
+        throw new Error("L'usufruitier doit être défini pour une clause démembrée");
+      }
       
-      // Calcul des montants pour l'affichage
-      const baseIndiv = primesApres70 * quotiteDecimale;
-      abattementApres70 = Math.min(abattementGlobal757B * quotiteDecimale, baseIndiv);
-      imposableApres70 = Math.max(0, baseIndiv - abattementApres70);
+      const pourcentageUsufruit = getPourcentageUsufruit(beneficiaire.usufruitier.age);
+      const pourcentageNuePropriete = 100 - pourcentageUsufruit;
+      
+      if (beneficiaire.typeClause === "usufruit") {
+        // Calcul pour l'usufruitier
+        const quotiteUsufruit = (quotiteDecimale * pourcentageUsufruit) / 100;
+        const resultatUsufruit = calculerFiscaliteBeneficiaire(
+          beneficiaire.usufruitier.lienParente,
+          beneficiaire.usufruitier.nom,
+          quotiteUsufruit,
+          valeurContrat,
+          base990I,
+          base757B,
+          primesApres70,
+          abattementGlobal757B
+        );
+        
+        resultats.push({
+          ...resultatUsufruit,
+          nom: `${beneficiaire.usufruitier.nom} (Usufruitier)`,
+          typeClause: "usufruit",
+          pourcentageUsufruit,
+          pourcentageNuePropriete,
+          usufruitier: beneficiaire.usufruitier.nom
+        });
+      } else {
+        // Calcul pour le nu-propriétaire
+        const quotiteNuePropriete = (quotiteDecimale * pourcentageNuePropriete) / 100;
+        const resultatNuePropriete = calculerFiscaliteBeneficiaire(
+          beneficiaire.lienParente,
+          beneficiaire.nom,
+          quotiteNuePropriete,
+          valeurContrat,
+          base990I,
+          base757B,
+          primesApres70,
+          abattementGlobal757B
+        );
+        
+        resultats.push({
+          ...resultatNuePropriete,
+          nom: `${beneficiaire.nom} (Nu-propriétaire)`,
+          typeClause: "nue-propriete",
+          pourcentageUsufruit,
+          pourcentageNuePropriete,
+          usufruitier: beneficiaire.usufruitier.nom
+        });
+      }
+    } else {
+      // Clause en pleine propriété (existant)
+      const resultat = calculerFiscaliteBeneficiaire(
+        beneficiaire.lienParente,
+        beneficiaire.nom,
+        quotiteDecimale,
+        valeurContrat,
+        base990I,
+        base757B,
+        primesApres70,
+        abattementGlobal757B
+      );
+      
+      resultats.push({
+        ...resultat,
+        typeClause: "pleine-propriete"
+      });
     }
-
-    const impotTotal = impotAvant70 + impotApres70;
-    const montantNet = montantBrut - impotTotal;
-    const tauxImposition = montantBrut > 0 ? (impotTotal / montantBrut) * 100 : 0;
-
-    return {
-      nom: beneficiaire.nom,
-      lienParente: beneficiaire.lienParente,
-      montantBrut,
-      partAvant70: partBenef990I,
-      partApres70: partBenef757B,
-      base990I: partBenef990I,
-      base757B: partBenef757B,
-      abattementAvant70,
-      abattementApres70,
-      imposableAvant70,
-      imposableApres70,
-      impotAvant70,
-      impotApres70,
-      impotTotal,
-      montantNet,
-      tauxImposition,
-      isExonereTepa
-    };
   });
 
   // Calculs globaux
@@ -264,6 +385,12 @@ export function calculDeces(params: ParametresDeces) {
 
   if (beneficiairesExoneres.length > 0) {
     optimisations.push(`${beneficiairesExoneres.length} bénéficiaire(s) totalement exonéré(s) grâce à la loi Tepa (conjoint/PACS).`);
+  }
+
+  // Conseil spécifique au démembrement
+  const clausesDemembrees = resultats.filter(r => r.typeClause === "usufruit" || r.typeClause === "nue-propriete");
+  if (clausesDemembrees.length > 0) {
+    optimisations.push(`Clause démembrée appliquée : optimisation fiscale par répartition des abattements au prorata.`);
   }
 
   // Vérification des abattements non utilisés (990 I)
