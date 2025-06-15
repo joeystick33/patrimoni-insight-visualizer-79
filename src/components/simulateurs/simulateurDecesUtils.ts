@@ -1,4 +1,3 @@
-
 interface Beneficiaire {
   nom: string;
   lienParente: "conjoint" | "enfant" | "petit-enfant" | "frere-soeur" | "neveu-niece" | "autre";
@@ -29,7 +28,7 @@ interface ResultatBeneficiaire {
   impotTotal: number;
   montantNet: number;
   tauxImposition: number;
-  isExonereTepa: boolean; // Nouveau champ pour identifier l'exonération Tepa
+  isExonereTepa: boolean;
 }
 
 // Barèmes des droits de succession selon le lien de parenté - Barèmes 2024
@@ -161,44 +160,52 @@ export function calculDeces(params: ParametresDeces) {
     const partApres70 = partPrimesApres70 + partProduitApres70;
 
     // Article 990 I (primes avant 70 ans + produits) - Abattement individuel
-    const abattementAvant70 = Math.min(152500, partAvant70);
-    const imposableAvant70 = Math.max(0, partAvant70 - abattementAvant70);
-    const impotAvant70 = calculerImpot990I(imposableAvant70);
+    let abattementAvant70 = 0;
+    let imposableAvant70 = 0;
+    let impotAvant70 = 0;
+
+    // CORRECTION 1: Si conjoint/PACS -> exonération totale (pas d'impôt 990 I)
+    if (isExonereTepa) {
+      abattementAvant70 = 0; // Pas d'abattement car exonération totale
+      imposableAvant70 = 0;
+      impotAvant70 = 0;
+    } else {
+      abattementAvant70 = Math.min(152500, partAvant70);
+      imposableAvant70 = Math.max(0, partAvant70 - abattementAvant70);
+      impotAvant70 = calculerImpot990I(imposableAvant70);
+    }
 
     // Article 757 B (primes après 70 ans seulement) + Réintégration fiscale
     let abattementApres70 = 0;
     let imposableApres70 = 0;
     let impotApres70 = 0;
 
-    if (partPrimesApres70 > 0) {
+    // CORRECTION 2: Si conjoint/PACS -> exonération totale même sur primes après 70 ans
+    if (isExonereTepa) {
+      // Exonération totale pour conjoint/PACS - aucun impôt même sur primes après 70 ans
+      abattementApres70 = 0;
+      imposableApres70 = 0;
+      impotApres70 = 0;
+    } else if (partPrimesApres70 > 0) {
+      // Pour les autres bénéficiaires : application normale de l'article 757B
       // D'abord, application de l'abattement global 757B (30 500€ commun)
       if (abattementRestant757B > 0) {
         abattementApres70 = Math.min(abattementRestant757B, partPrimesApres70);
         abattementRestant757B -= abattementApres70;
       }
       
-      // Montant restant après abattement 757B
+      // Montant restant après abattement 757B (SEULEMENT les primes, pas les produits)
       const restantApresAbattement757B = Math.max(0, partPrimesApres70 - abattementApres70);
       
       if (restantApresAbattement757B > 0) {
         // Réintégration dans la succession avec abattement de droit commun
-        // Si conjoint/PACS -> exonération totale (Loi Tepa)
-        if (isExonereTepa) {
-          impotApres70 = 0;
-          imposableApres70 = 0;
-        } else {
-          // Pour les autres : application des abattements et barèmes de droit commun
-          imposableApres70 = restantApresAbattement757B;
-          impotApres70 = calculerImpotSuccession(restantApresAbattement757B, beneficiaire.lienParente);
-        }
+        imposableApres70 = restantApresAbattement757B;
+        impotApres70 = calculerImpotSuccession(restantApresAbattement757B, beneficiaire.lienParente);
       }
     }
 
-    // Les produits après 70 ans suivent la même logique que les primes après 70 ans
-    if (partProduitApres70 > 0 && !isExonereTepa) {
-      impotApres70 += calculerImpotSuccession(partProduitApres70, beneficiaire.lienParente);
-      imposableApres70 += partProduitApres70;
-    }
+    // CORRECTION 3: Les produits après 70 ans sont EXONÉRÉS d'impôt pour TOUS les bénéficiaires
+    // (pas d'ajout d'impôt sur partProduitApres70)
 
     const impotTotal = impotAvant70 + impotApres70;
     const montantNet = montantBrut - impotTotal;
