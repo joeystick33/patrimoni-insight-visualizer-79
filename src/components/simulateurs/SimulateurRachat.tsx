@@ -14,8 +14,21 @@ const initialValues = {
   modeTMI: "manuel" as "manuel" | "automatique",
   tmi: "",
   revenuNetImposable: "",
-  foyer: "1",
+  foyer: "", // *ne sera plus directement affiché, mais déduit
+  statut: "celibataire" as "celibataire" | "couple",
+  enfants: "",
 };
+
+function calculerNombreParts(statut: "celibataire" | "couple", nbEnfants: number): number {
+  if (!nbEnfants || nbEnfants < 0) nbEnfants = 0;
+  let nbParts = statut === "couple" ? 2 : 1;
+  if (nbEnfants <= 2) {
+    nbParts += 0.5 * nbEnfants;
+  } else {
+    nbParts += 1 * (nbEnfants - 2) + 1;
+  }
+  return nbParts;
+}
 
 const SimulateurRachat: React.FC = () => {
   const [values, setValues] = useState(initialValues);
@@ -37,8 +50,8 @@ const SimulateurRachat: React.FC = () => {
   };
 
   // Calcul automatique de la TMI basé sur le revenu net imposable et le nombre de parts
-  const calculateTMI = (revenuNetImposable: number, foyer: number): number => {
-    const quotientFamilial = revenuNetImposable / foyer;
+  const calculateTMI = (revenuNetImposable: number, nbParts: number): number => {
+    const quotientFamilial = revenuNetImposable / nbParts;
     if (quotientFamilial <= 11294) return 0;
     if (quotientFamilial <= 28797) return 11;
     if (quotientFamilial <= 82341) return 30;
@@ -46,20 +59,35 @@ const SimulateurRachat: React.FC = () => {
     return 45;
   };
 
+  // Détermination automatique du nombre de parts fiscales
+  const nbParts =
+    values.modeTMI === "automatique"
+      ? calculerNombreParts(values.statut, parseInt(values.enfants || "0"))
+      : (values.foyer ? parseFloat(values.foyer) : values.statut === "couple" ? 2 : 1);
+
+  // Abattement selon situation pour barème IR
+  const abattement =
+    values.statut === "couple" ? 9200 : 4600;
+
   // TMI : soit manuelle, soit calculée automatiquement
-  const tmiValue = values.modeTMI === "manuel" 
-    ? parseFloat(values.tmi || "0")
-    : calculateTMI(
-        parseFloat(values.revenuNetImposable || "0"), 
-        Number(values.foyer) || 1
-      );
+  const tmiValue =
+    values.modeTMI === "manuel"
+      ? parseFloat(values.tmi || "0")
+      : calculateTMI(
+          parseFloat(values.revenuNetImposable || "0"),
+          nbParts
+        );
 
   // Prêt à calculer si champs requis remplis
   const ready =
     !!values.valeurContrat &&
     !!values.versements &&
     !!values.montantRachat &&
-    (values.modeTMI === "manuel" ? !!values.tmi : !!values.revenuNetImposable);
+    (values.modeTMI === "manuel"
+      ? !!values.tmi
+      : !!values.revenuNetImposable) &&
+    !!values.statut &&
+    (values.modeTMI === "manuel" || values.enfants !== undefined);
 
   let resultats;
   if (showResults && ready) {
@@ -70,7 +98,8 @@ const SimulateurRachat: React.FC = () => {
       anciennete: values.anciennete,
       modeTMI: values.modeTMI,
       tmi: tmiValue,
-      foyer: Number(values.foyer) || 1,
+      foyer: nbParts,
+      abattement: abattement,
     });
   }
 
@@ -103,14 +132,20 @@ const SimulateurRachat: React.FC = () => {
         </div>
       </form>
       <p className="text-xs text-muted-foreground mt-4">
-        Renseignez toutes les valeurs pour visualiser la fiscalité du rachat partiel ou total.
+        Renseignez toutes les valeurs pour visualiser la fiscalité du rachat partiel ou total.<br />
+        Abattement applicable : <span className="font-semibold">{values.statut === "couple" ? "9 200 € (couple)" : "4 600 € (célibataire)"}</span>
+        <br />
+        {values.modeTMI === "automatique" &&
+          <>
+            Nombre de parts fiscales automatiquement calculé : <span className="font-semibold">{nbParts}</span>
+          </>
+        }
       </p>
       {showResults && ready && resultats && (
-        <RachatResultats montantRachat={parseFloat(values.montantRachat)} resultats={resultats} />
+        <RachatResultats montantRachat={parseFloat(values.montantRachat)} resultats={resultats} abattement={abattement} parts={nbParts} statut={values.statut} />
       )}
     </div>
   );
 };
 
 export default SimulateurRachat;
-

@@ -13,6 +13,8 @@ type Props = {
     tmi: string;
     revenuNetImposable: string;
     foyer: string;
+    statut: "celibataire" | "couple";
+    enfants: string;
   };
   onChange: (name: string, value: string) => void;
 };
@@ -69,6 +71,33 @@ const RachatInputs: React.FC<Props> = ({ values, onChange }) => {
         </select>
       </div>
       <div className="col-span-2">
+        <Label>Situation familiale</Label>
+        <div className="flex gap-3 mt-1">
+          <button
+            type="button"
+            className={`px-3 py-2 rounded border ${
+              values.statut === "celibataire"
+                ? "bg-primary text-primary-foreground"
+                : "bg-accent"
+            }`}
+            onClick={() => onChange("statut", "celibataire")}
+          >
+            Célibataire
+          </button>
+          <button
+            type="button"
+            className={`px-3 py-2 rounded border ${
+              values.statut === "couple"
+                ? "bg-primary text-primary-foreground"
+                : "bg-accent"
+            }`}
+            onClick={() => onChange("statut", "couple")}
+          >
+            Marié / Pacsé
+          </button>
+        </div>
+      </div>
+      <div className="col-span-2">
         <Label>Mode de calcul de la TMI</Label>
         <div className="flex gap-3 mt-1">
           <button
@@ -95,6 +124,8 @@ const RachatInputs: React.FC<Props> = ({ values, onChange }) => {
           </button>
         </div>
       </div>
+
+      {/* Si TMI manuel, on affiche juste la saisie de TMI */}
       {values.modeTMI === "manuel" ? (
         <div>
           <Label htmlFor="tmi">TMI (Tranche marginale, en %)</Label>
@@ -125,22 +156,49 @@ const RachatInputs: React.FC<Props> = ({ values, onChange }) => {
             />
           </div>
           <div>
-            <Label htmlFor="foyer">Nombre de parts (foyer fiscal)</Label>
+            <Label htmlFor="enfants">
+              Nombre d'enfants à charge
+              <span className='text-xs text-muted-foreground block'>(pour le calcul du quotient familial)</span>
+            </Label>
             <Input
               type="number"
-              id="foyer"
-              min={1}
+              id="enfants"
+              min={0}
               placeholder="Ex : 2"
-              value={values.foyer}
+              value={values.enfants}
               inputMode="decimal"
-              onChange={(e) => onChange("foyer", e.target.value)}
+              onChange={(e) => onChange("enfants", e.target.value)}
             />
           </div>
         </>
+      )}
+
+      {/* On affiche toujours le nombre de parts dans le résumé si option auto */}
+      {values.modeTMI === "automatique" && (
+        <div className="col-span-2">
+          <span className="text-xs text-muted-foreground">
+            Nombre de parts fiscales automatiquement déterminé selon situation familiale ({values.statut === "celibataire" ? "célibataire" : "couple"}) et {values.enfants || "0"} enfant(s)&nbsp;: 
+            <span className="font-semibold ml-2">{calculerNombreParts(values.statut, parseInt(values.enfants || "0"))}</span>
+          </span>
+        </div>
       )}
     </div>
   );
 };
 
-export default RachatInputs;
+// Calcule le nombre de parts fiscales selon le barème famille
+function calculerNombreParts(
+  statut: "celibataire" | "couple",
+  nbEnfants: number
+): number {
+  if (!nbEnfants || nbEnfants < 0) nbEnfants = 0;
+  let nbParts = statut === "couple" ? 2 : 1;
+  if (nbEnfants <= 2) {
+    nbParts += 0.5 * nbEnfants;
+  } else {
+    nbParts += 1 * (nbEnfants - 2) + 1;
+  }
+  return nbParts;
+}
 
+export default RachatInputs;

@@ -7,6 +7,7 @@ export type RachatInputs = {
   modeTMI: "manuel" | "automatique";
   tmi: number; // En % (ex: 30)
   foyer: number; // Nombre de parts fiscales
+  abattement?: number; // Ajout du champ abattement
 };
 
 export type RachatResultats = {
@@ -27,17 +28,7 @@ export type RachatResultats = {
 };
 
 /**
- * AMÉLIORÉ : Calcule la fiscalité du rachat d'assurance vie selon les règles françaises 2024
- * 
- * Article 125-0 A du CGI - Prélèvement Forfaitaire Unique (PFU) :
- * - 12,8% d'impôt + 17,2% de prélèvements sociaux = 30% total
- * - Pas d'abattement, même après 8 ans
- * - S'applique sur la totalité de la part d'intérêts
- * 
- * Article 150-0 A du CGI - Barème progressif de l'IR :
- * - Taux marginal d'imposition + 17,2% de prélèvements sociaux
- * - Après 8 ans : abattement de 4600€ (célibataire) ou 9200€ (couple)
- * - L'abattement ne s'applique QUE sur la part soumise à l'IR, pas aux prélèvements sociaux
+ * Calcule la fiscalité du rachat d'assurance vie selon les règles françaises 2024
  */
 export function calculRachat(inputs: RachatInputs): RachatResultats {
   const {
@@ -47,13 +38,13 @@ export function calculRachat(inputs: RachatInputs): RachatResultats {
     anciennete,
     tmi,
     foyer,
+    abattement: abattementExterne,
   } = inputs;
 
-  // Validation des données
   if (montantRachat > valeurContrat) {
     throw new Error("Le montant du rachat ne peut pas dépasser la valeur du contrat");
   }
-  
+
   if (versements > valeurContrat) {
     throw new Error("Le montant des versements ne peut pas dépasser la valeur du contrat");
   }
@@ -70,14 +61,14 @@ export function calculRachat(inputs: RachatInputs): RachatResultats {
   const netPFU = montantRachat - (impotPFU + pso);
   const tauxImpositionPFU = montantRachat > 0 ? ((impotPFU + pso) / montantRachat) * 100 : 0;
 
-  // 4. OPTION BARÈME IR : abattement uniquement si contrat > 8 ans
+  // 4. OPTION BARÈME IR : abattement uniquement si contrat > 8 ans ET prendre en compte abattement transmis
   let abattement = 0;
   if (anciennete === "plus8") {
-    abattement = foyer >= 2 ? 9200 : 4600;
+    abattement = abattementExterne || (foyer >= 2 ? 9200 : 4600);
     abattement = Math.min(abattement, partInterets); // L'abattement ne peut pas dépasser les intérêts
   }
 
-  // Base imposable IR après abattement (mais PSO reste sur la totalité)
+  // Base imposable IR après abattement
   const baseImposableIR = Math.max(0, partInterets - abattement);
   const impotIR = baseImposableIR * (tmi / 100);
   const netIR = montantRachat - (impotIR + pso);
