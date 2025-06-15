@@ -179,6 +179,25 @@ const DecesResultats: React.FC<DecesResultatsProps> = ({ resultats }) => {
                   )}
                 </div>
                 
+                {/* Affichage spécial pour les clauses démembrées */}
+                {(beneficiaire.typeClause === "usufruit" || beneficiaire.typeClause === "nue-propriete") && (
+                  <div className="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    <h5 className="font-medium text-amber-800 mb-2">🔄 Démembrement de propriété</h5>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <div className="text-amber-700">Part d'usufruit : {formatPourcentage(beneficiaire.pourcentageUsufruit || 0)}</div>
+                        <div className="text-xs text-amber-600">Usufruitier : {beneficiaire.usufruitier}</div>
+                      </div>
+                      <div>
+                        <div className="text-amber-700">Part de nue-propriété : {formatPourcentage(beneficiaire.pourcentageNuePropriete || 0)}</div>
+                        <div className="text-xs text-amber-600">
+                          {beneficiaire.typeClause === "usufruit" ? "Bénéficie de l'usufruit" : "Bénéficie de la nue-propriété"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <h5 className="font-medium mb-2">💰 Répartition proportionnelle</h5>
@@ -186,6 +205,11 @@ const DecesResultats: React.FC<DecesResultatsProps> = ({ resultats }) => {
                       <div>Montant brut total: <span className="font-medium">{formatMontant(beneficiaire.montantBrut)}</span></div>
                       <div className="text-blue-600">• Base 990 I (avant 70): {formatMontant(beneficiaire.base990I)}</div>
                       <div className="text-purple-600">• Base 757 B (après 70): {formatMontant(beneficiaire.base757B)}</div>
+                      {(beneficiaire.partUsufruit || beneficiaire.partNuePropriete) && (
+                        <div className="text-amber-600 text-xs">
+                          • Part effective: {formatPourcentage((beneficiaire.partUsufruit || beneficiaire.partNuePropriete || 0) * 100)}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -198,11 +222,15 @@ const DecesResultats: React.FC<DecesResultatsProps> = ({ resultats }) => {
                         <>
                           <div className="text-blue-600">
                             Régime 990 I: {formatMontant(beneficiaire.impotAvant70)}
-                            <div className="text-xs">Abattement: {formatMontant(beneficiaire.abattementAvant70)}</div>
+                            <div className="text-xs">
+                              Abattement {(beneficiaire.partUsufruit || beneficiaire.partNuePropriete) ? 'proportionnel' : 'standard'}: {formatMontant(beneficiaire.abattementAvant70)}
+                            </div>
                           </div>
                           <div className="text-purple-600">
                             Régime 757 B: {formatMontant(beneficiaire.impotApres70)}
-                            <div className="text-xs">Abattement proratisé: {formatMontant(beneficiaire.abattementApres70)}</div>
+                            <div className="text-xs">
+                              Abattement {(beneficiaire.partUsufruit || beneficiaire.partNuePropriete) ? 'proportionnel' : 'proratisé'}: {formatMontant(beneficiaire.abattementApres70)}
+                            </div>
                           </div>
                         </>
                       )}
@@ -230,14 +258,16 @@ const DecesResultats: React.FC<DecesResultatsProps> = ({ resultats }) => {
       {/* Méthode proportionnelle expliquée */}
       <Card className="border-blue-200">
         <CardHeader>
-          <CardTitle className="text-blue-700">📐 Méthode proportionnelle appliquée</CardTitle>
+          <CardTitle className="text-blue-700">📐 Méthode de calcul appliquée</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-sm space-y-2 text-blue-700">
             <p><strong>Répartition automatique :</strong> Le capital total est divisé proportionnellement selon le ratio des primes versées.</p>
-            <p><strong>Base 990 I :</strong> {formatPourcentage(100 - resultats.ratioApres70)} du capital (abattement 152 500 € par bénéficiaire).</p>
-            <p><strong>Base 757 B :</strong> {formatPourcentage(resultats.ratioApres70)} du capital (abattement global 30 500 € réparti au prorata).</p>
-            <p><strong>Intérêts après 70 ans :</strong> Automatiquement exonérés d'impôt pour tous les bénéficiaires.</p>
+            <p><strong>Base 990 I :</strong> {formatPourcentage(100 - resultats.ratioApres70)} du capital.</p>
+            <p><strong>Base 757 B :</strong> {formatPourcentage(resultats.ratioApres70)} du capital.</p>
+            <p><strong>Clauses démembrées :</strong> Abattements proportionnels aux parts d'usufruit/nue-propriété selon le barème fiscal.</p>
+            <p><strong>Abattement 990 I :</strong> 152 500 € × part effective pour les clauses démembrées, 152 500 € par bénéficiaire sinon.</p>
+            <p><strong>Abattement 757 B :</strong> 30 500 € global réparti proportionnellement aux parts reçues.</p>
             <p><strong>Conjoint/PACS :</strong> Exonération totale grâce à la loi Tepa (0% d'impôt).</p>
           </div>
         </CardContent>

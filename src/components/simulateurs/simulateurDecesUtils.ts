@@ -1,3 +1,4 @@
+
 interface Beneficiaire {
   nom: string;
   lienParente: "conjoint" | "enfant" | "petit-enfant" | "frere-soeur" | "neveu-niece" | "autre";
@@ -41,6 +42,8 @@ interface ResultatBeneficiaire {
   pourcentageUsufruit?: number;
   pourcentageNuePropriete?: number;
   usufruitier?: string;
+  partUsufruit?: number;
+  partNuePropriete?: number;
 }
 
 // Barèmes des droits de succession selon le lien de parenté - Barèmes 2024
@@ -189,7 +192,9 @@ function calculerFiscaliteBeneficiaire(
   base990I: number,
   base757B: number,
   primesApres70: number,
-  abattementGlobal757B: number
+  abattementGlobal757B: number,
+  partUsufruit?: number,
+  partNuePropriete?: number
 ): ResultatBeneficiaire {
   const bareme = baremesSuccession[lienParente as keyof typeof baremesSuccession];
   const isExonereTepa = bareme?.exonerationTepa || false;
@@ -210,8 +215,10 @@ function calculerFiscaliteBeneficiaire(
     imposableAvant70 = 0;
     impotAvant70 = 0;
   } else {
-    // Abattement individuel : 152 500 € par bénéficiaire
-    abattementAvant70 = Math.min(152500, partBenef990I);
+    // Pour les clauses démembrées : abattement proportionnel à la part reçue
+    const abattementBase = 152500;
+    const partEffective = partUsufruit !== undefined ? partUsufruit : (partNuePropriete !== undefined ? partNuePropriete : 1);
+    abattementAvant70 = Math.min(abattementBase * partEffective, partBenef990I);
     imposableAvant70 = Math.max(0, partBenef990I - abattementAvant70);
     impotAvant70 = calculerImpot990I(imposableAvant70);
   }
@@ -227,12 +234,13 @@ function calculerFiscaliteBeneficiaire(
     imposableApres70 = 0;
     impotApres70 = 0;
   } else if (primesApres70 > 0) {
-    // Application de la formule exacte que vous avez fournie
-    impotApres70 = calculDroits757B(primesApres70, quotiteDecimale, lienParente);
+    // Pour les clauses démembrées : abattement 757B proportionnel à la part reçue
+    const partEffective = partUsufruit !== undefined ? partUsufruit : (partNuePropriete !== undefined ? partNuePropriete : 1);
+    impotApres70 = calculDroits757B(primesApres70, quotiteDecimale * partEffective, lienParente);
     
     // Calcul des montants pour l'affichage
-    const baseIndiv = primesApres70 * quotiteDecimale;
-    abattementApres70 = Math.min(abattementGlobal757B * quotiteDecimale, baseIndiv);
+    const baseIndiv = primesApres70 * quotiteDecimale * partEffective;
+    abattementApres70 = Math.min(abattementGlobal757B * quotiteDecimale * partEffective, baseIndiv);
     imposableApres70 = Math.max(0, baseIndiv - abattementApres70);
   }
 
@@ -257,7 +265,9 @@ function calculerFiscaliteBeneficiaire(
     impotTotal,
     montantNet,
     tauxImposition,
-    isExonereTepa
+    isExonereTepa,
+    partUsufruit,
+    partNuePropriete
   };
 }
 
@@ -305,18 +315,24 @@ export function calculDeces(params: ParametresDeces) {
       const pourcentageUsufruit = getPourcentageUsufruit(beneficiaire.usufruitier.age);
       const pourcentageNuePropriete = 100 - pourcentageUsufruit;
       
+      // Conversion en parts décimales
+      const partUsufruit = pourcentageUsufruit / 100;
+      const partNuePropriete = pourcentageNuePropriete / 100;
+      
       if (beneficiaire.typeClause === "usufruit") {
-        // Calcul pour l'usufruitier
-        const quotiteUsufruit = (quotiteDecimale * pourcentageUsufruit) / 100;
+        // Calcul pour l'usufruitier - il reçoit sa part d'usufruit
+        const quotiteUsufruitEffective = quotiteDecimale * partUsufruit;
         const resultatUsufruit = calculerFiscaliteBeneficiaire(
           beneficiaire.usufruitier.lienParente,
           beneficiaire.usufruitier.nom,
-          quotiteUsufruit,
+          quotiteUsufruitEffective,
           valeurContrat,
           base990I,
           base757B,
           primesApres70,
-          abattementGlobal757B
+          abattementGlobal757B,
+          partUsufruit,
+          undefined
         );
         
         resultats.push({
@@ -325,20 +341,24 @@ export function calculDeces(params: ParametresDeces) {
           typeClause: "usufruit",
           pourcentageUsufruit,
           pourcentageNuePropriete,
-          usufruitier: beneficiaire.usufruitier.nom
+          usufruitier: beneficiaire.usufruitier.nom,
+          partUsufruit,
+          partNuePropriete
         });
       } else {
-        // Calcul pour le nu-propriétaire
-        const quotiteNuePropriete = (quotiteDecimale * pourcentageNuePropriete) / 100;
+        // Calcul pour le nu-propriétaire - il reçoit sa part de nue-propriété
+        const quotiteNueProprietEffective = quotiteDecimale * partNuePropriete;
         const resultatNuePropriete = calculerFiscaliteBeneficiaire(
           beneficiaire.lienParente,
           beneficiaire.nom,
-          quotiteNuePropriete,
+          quotiteNueProprietEffective,
           valeurContrat,
           base990I,
           base757B,
           primesApres70,
-          abattementGlobal757B
+          abattementGlobal757B,
+          undefined,
+          partNuePropriete
         );
         
         resultats.push({
@@ -347,7 +367,9 @@ export function calculDeces(params: ParametresDeces) {
           typeClause: "nue-propriete",
           pourcentageUsufruit,
           pourcentageNuePropriete,
-          usufruitier: beneficiaire.usufruitier.nom
+          usufruitier: beneficiaire.usufruitier.nom,
+          partUsufruit,
+          partNuePropriete
         });
       }
     } else {
@@ -390,13 +412,16 @@ export function calculDeces(params: ParametresDeces) {
   // Conseil spécifique au démembrement
   const clausesDemembrees = resultats.filter(r => r.typeClause === "usufruit" || r.typeClause === "nue-propriete");
   if (clausesDemembrees.length > 0) {
-    optimisations.push(`Clause démembrée appliquée : optimisation fiscale par répartition des abattements au prorata.`);
+    optimisations.push(`Clause démembrée appliquée : abattements proportionnels aux parts d'usufruit/nue-propriété selon le barème fiscal.`);
   }
 
-  // Vérification des abattements non utilisés (990 I)
-  const beneficiairesAbattementNonUtilise = resultats.filter(r => r.abattementAvant70 < 152500 && r.base990I > 0);
-  if (beneficiairesAbattementNonUtilise.length > 0) {
-    optimisations.push(`${beneficiairesAbattementNonUtilise.length} bénéficiaire(s) n'utilisent pas la totalité de leur abattement 990 I (152 500 €). Considérez une répartition plus équitable.`);
+  // Vérification des abattements 990 I pour les clauses démembrées
+  const beneficiairesAbattementProportionnel = resultats.filter(r => 
+    (r.typeClause === "usufruit" || r.typeClause === "nue-propriete") && 
+    r.base990I > 0
+  );
+  if (beneficiairesAbattementProportionnel.length > 0) {
+    optimisations.push(`Clauses démembrées : abattements 990I appliqués proportionnellement aux parts reçues (${beneficiairesAbattementProportionnel.length} bénéficiaire(s) concerné(s)).`);
   }
 
   // Optimisation versements après 70 ans
