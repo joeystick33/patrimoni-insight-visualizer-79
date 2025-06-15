@@ -65,9 +65,9 @@ const SimulateurRachat: React.FC = () => {
       ? calculerNombreParts(values.statut, parseInt(values.enfants || "0"))
       : (values.foyer ? parseFloat(values.foyer) : values.statut === "couple" ? 2 : 1);
 
-  // Abattement selon situation pour barème IR
-  const abattement =
-    values.statut === "couple" ? 9200 : 4600;
+  // Abattement selon situation pour barème IR et PFU : important d'afficher le bon montant pour la situation utilisateur
+  const abattement = values.statut === "couple" ? 9200 : 4600;
+  const abattementTxt = `${values.statut === "couple" ? "9 200 € (marié/Pacsé)" : "4 600 € (célibataire)"}`;
 
   // TMI : soit manuelle, soit calculée automatiquement
   const tmiValue =
@@ -133,7 +133,7 @@ const SimulateurRachat: React.FC = () => {
       </form>
       <p className="text-xs text-muted-foreground mt-4">
         Renseignez toutes les valeurs pour visualiser la fiscalité du rachat partiel ou total.<br />
-        Abattement applicable : <span className="font-semibold">{values.statut === "couple" ? "9 200 € (couple)" : "4 600 € (célibataire)"}</span>
+        Abattement applicable : <span className="font-semibold">{abattementTxt}</span>
         <br />
         {values.modeTMI === "automatique" &&
           <>
@@ -142,10 +142,11 @@ const SimulateurRachat: React.FC = () => {
         }
       </p>
       {showResults && ready && resultats && (
-        <RachatResultats montantRachat={parseFloat(values.montantRachat)} resultats={resultats} abattement={abattement} parts={nbParts} statut={values.statut} />
+        <RachatResultats montantRachat={parseFloat(values.montantRachat)} resultats={resultats} parts={nbParts} statut={values.statut} />
       )}
     </div>
   );
 };
 
 export default SimulateurRachat;
+
