@@ -1,4 +1,3 @@
-
 export type RachatInputs = {
   valeurContrat: number;
   versements: number;
@@ -46,24 +45,26 @@ export function calculRachat(inputs: RachatInputs): RachatResultats {
   // Abattement si +8 ans
   let abattement = 0;
   if (anciennete === "plus8") {
-    abattement = 4600; // Valeur indicative, à rendre dynamique selon la composition du foyer
+    abattement = 4600;
   }
 
-  // IR : TMI × part
-  let partIR = Math.max(0, partInterets - abattement);
-  const impotIR = partIR * (tmi / 100);
+  // Barème IR : TMI × part après abattement
+  let baseIR = Math.max(0, partInterets - abattement);
+  const impotIR = baseIR * (tmi / 100);
 
   // Net après impôt
   const netPFU = montantRachat - (impotPFU + pso);
   const netIR = montantRachat - (impotIR + pso);
 
   let message = undefined;
-  if (netIR > netPFU)
-    message =
-      "Le PFU (prélèvement forfaitaire unique) est plus avantageux dans votre cas.";
-  else if (netIR < netPFU)
-    message =
-      "Le barème IR est plus avantageux dans votre cas (hors prélèvements sociaux).";
+  // Suggestion : si baseIR == 0, le barème IR est forcément le plus avantageux fiscalement (zéro impôt)
+  if (baseIR === 0) {
+    message = "Le barème IR est le plus avantageux dans votre cas, car la base imposable est nulle.";
+  } else if (netIR > netPFU) {
+    message = "Le PFU (prélèvement forfaitaire unique) est plus avantageux dans votre cas.";
+  } else if (netIR < netPFU) {
+    message = "Le barème IR est plus avantageux dans votre cas (hors prélèvements sociaux).";
+  }
 
   return {
     partInterets,

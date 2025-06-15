@@ -1,4 +1,3 @@
-
 import React from "react";
 import {
   ChartContainer,
@@ -145,6 +144,30 @@ const RachatResultats: React.FC<Props> = ({ montantRachat, resultats }) => {
             {resultats.message}
           </div>
         )}
+      </div>
+
+      {/* Explication pédagogique ajoutée */}
+      <div className="w-full max-w-xl mt-6">
+        <div className="bg-blue-50 dark:bg-blue-900/10 rounded-lg shadow p-4 text-blue-800 dark:text-blue-200 text-sm">
+          <strong>À savoir sur le rachat en assurance vie&nbsp;:</strong>
+          <br />
+          Le rachat consiste à retirer une partie (ou la totalité) de l’épargne de votre contrat d’assurance vie.<br />
+          <br />
+          <strong>Fiscalité des rachats :</strong> selon votre choix (PFU ou barème IR), l’impôt sur les intérêts est prélevé différemment. Après 8 ans, un abattement fiscal s’applique sur une partie des intérêts perçus.<br />
+          <br />
+          <strong>Impact sur le RFR&nbsp;:</strong> 
+          <ul className="list-disc pl-6 mt-1">
+            <li>
+              Quel que soit le mode d’imposition choisi (PFU ou barème IR), la part d’intérêts imposable majorera votre <span className="font-semibold">revenu fiscal de référence (RFR)</span>.
+            </li>
+            <li>
+              ⚠️ Un RFR plus élevé peut rendre inéligible à certaines aides (bourses, aides sociales, réductions tarifaires...) ou impacter la taxe d’habitation. 
+            </li>
+            <li>
+              <span className="font-semibold">Le choix du barème IR</span> permet parfois, en cas de base imposable nulle (après abattement), de ne pas payer d’impôt sur le revenu… mais la part d’intérêts s’ajoute tout de même au RFR !
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
   );
