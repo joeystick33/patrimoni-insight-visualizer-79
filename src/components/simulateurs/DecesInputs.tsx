@@ -1,3 +1,4 @@
+
 import React from "react";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -81,11 +82,6 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
     return baseBeneficiaire;
   };
 
-  const addUsufruitier = () => {
-    const newUsufruitier = createBeneficiaireTemplate("usufruit");
-    onChange("beneficiaires", [...values.beneficiaires, newUsufruitier]);
-  };
-
   // Ajuste la création d'un nu-propriétaire pour les clauses démembrées
   const addNuProprietaire = () => {
     const baseBeneficiaire = {
@@ -94,6 +90,11 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
       age: "",
       quotite: "0",
       typeClause: "nue-propriete" as const,
+      usufruitier: values.beneficiaires[0]?.usufruitier || {
+        nom: "",
+        age: "",
+        lienParente: "conjoint" as const
+      }
     };
     onChange("beneficiaires", [...values.beneficiaires, baseBeneficiaire]);
   };
@@ -136,12 +137,13 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
         lienParente: "conjoint" as const
       };
       
+      // Pour les clauses démembrées, on ne crée que des nu-propriétaires
       newBeneficiaires = [{
         nom: "",
-        lienParente: "conjoint" as const,
+        lienParente: "enfant" as const,
         age: "",
         quotite: "100",
-        typeClause: "usufruit" as const,
+        typeClause: "nue-propriete" as const,
         usufruitier: usufruitierDefaut
       }];
     } else {
@@ -152,9 +154,6 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
     onChange("clauseType", newClauseType);
     onChange("beneficiaires", newBeneficiaires);
   };
-
-  // Vérifier s'il y a au moins un usufruitier pour les clauses démembrées
-  const hasUsufruitier = values.beneficiaires.some(b => b.typeClause === "usufruit");
 
   return (
     <div className="space-y-6">
@@ -328,12 +327,11 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                 </div>
               </div>
               
-              {/* Pour démembrée : uniquement des nu-propriétaires */}
+              {/* Pour démembrée : uniquement des nu-propriétaires */}
               {values.beneficiaires
                 .filter(b => values.clauseType !== "demembree" || b.typeClause === "nue-propriete")
                 .map((beneficiaire, index) => (
                 <Card key={index} className="p-4">
-                  {/* Pour démembrée, plus d'encart "Usufruitier" */}
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                       <Label>
