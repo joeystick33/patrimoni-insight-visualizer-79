@@ -120,7 +120,7 @@ const RachatResultats: React.FC<Props> = ({ montantRachat, resultats }) => {
                   cy="50%"
                   labelLine={false}
                   label={({ name, value, percent }) => `${name}: ${formatMontant(value)} (${(percent * 100).toFixed(1)}%)`}
-                  ou terRadius={80}
+                  outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
                 >
