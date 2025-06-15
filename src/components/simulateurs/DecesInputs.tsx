@@ -58,42 +58,43 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
     onChange("beneficiaires", newBeneficiaires);
   };
 
-  const addBeneficiaire = () => {
-    const newBeneficiaire = {
+  const createBeneficiaireTemplate = (typeClause: "pleine-propriete" | "usufruit" | "nue-propriete") => {
+    const baseBeneficiaire = {
       nom: "",
       lienParente: "enfant" as const,
       age: "",
       quotite: "0",
-      typeClause: values.clauseType === "demembree" ? "nue-propriete" as const : "pleine-propriete" as const
+      typeClause
     };
 
-    // Pour les clauses démembrées, on ajoute toujours l'usufruitier
+    // Pour les clauses démembrées, on ajoute toujours l'usufruitier de référence
     if (values.clauseType === "demembree") {
-      newBeneficiaire.usufruitier = {
-        nom: "",
-        age: "",
-        lienParente: "conjoint" as const
+      return {
+        ...baseBeneficiaire,
+        usufruitier: {
+          nom: "",
+          age: "",
+          lienParente: "conjoint" as const
+        }
       };
     }
 
-    onChange("beneficiaires", [...values.beneficiaires, newBeneficiaire]);
+    return baseBeneficiaire;
   };
 
   const addUsufruitier = () => {
-    const newUsufruitier = {
-      nom: "",
-      lienParente: "conjoint" as const,
-      age: "",
-      quotite: "0",
-      typeClause: "usufruit" as const,
-      usufruitier: {
-        nom: "",
-        age: "",
-        lienParente: "conjoint" as const
-      }
-    };
-    
+    const newUsufruitier = createBeneficiaireTemplate("usufruit");
     onChange("beneficiaires", [...values.beneficiaires, newUsufruitier]);
+  };
+
+  const addNuProprietaire = () => {
+    const newNuProprietaire = createBeneficiaireTemplate("nue-propriete");
+    onChange("beneficiaires", [...values.beneficiaires, newNuProprietaire]);
+  };
+
+  const addBeneficiaire = () => {
+    const newBeneficiaire = createBeneficiaireTemplate("pleine-propriete");
+    onChange("beneficiaires", [...values.beneficiaires, newBeneficiaire]);
   };
 
   const removeBeneficiaire = (index: number) => {
@@ -105,19 +106,15 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
 
   const totalQuotite = values.beneficiaires.reduce((sum, b) => sum + parseFloat(b.quotite || "0"), 0);
 
-  // Gestion automatique des valeurs par défaut
   const handlePrimesApres70Change = (value: string) => {
-    // Si vide, on met automatiquement 0
     const finalValue = value === "" ? "0" : value;
     onChange("primesApres70", finalValue);
   };
 
-  // Reset des bénéficiaires quand on change le type de clause
   const handleClauseTypeChange = (newClauseType: string) => {
     let newBeneficiaires;
     
     if (newClauseType === "standard") {
-      // Clause standard : un seul bénéficiaire générique
       newBeneficiaires = [{
         nom: "Clause standard",
         lienParente: "conjoint" as const,
@@ -126,28 +123,11 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
         typeClause: "pleine-propriete" as const
       }];
     } else if (newClauseType === "demembree") {
-      // Clause démembrée : usufruitier par défaut
-      newBeneficiaires = [{
-        nom: "",
-        lienParente: "conjoint" as const,
-        age: "",
-        quotite: "100",
-        typeClause: "usufruit" as const,
-        usufruitier: {
-          nom: "",
-          age: "",
-          lienParente: "conjoint" as const
-        }
-      }];
+      newBeneficiaires = [createBeneficiaireTemplate("usufruit")];
+      newBeneficiaires[0].quotite = "100";
     } else {
-      // Clause personnalisée : bénéficiaire en pleine propriété
-      newBeneficiaires = [{
-        nom: "",
-        lienParente: "enfant" as const,
-        age: "",
-        quotite: "100",
-        typeClause: "pleine-propriete" as const
-      }];
+      newBeneficiaires = [createBeneficiaireTemplate("pleine-propriete")];
+      newBeneficiaires[0].quotite = "100";
     }
     
     onChange("clauseType", newClauseType);
@@ -271,7 +251,7 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                         <Plus className="w-4 h-4 mr-2" />
                         Ajouter usufruitier
                       </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={addBeneficiaire}>
+                      <Button type="button" variant="outline" size="sm" onClick={addNuProprietaire}>
                         <Plus className="w-4 h-4 mr-2" />
                         Ajouter nu-propriétaire
                       </Button>
@@ -296,7 +276,7 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                   )}
 
                   {/* Informations de l'usufruitier pour déterminer la répartition */}
-                  {values.clauseType === "demembree" && (
+                  {values.clauseType === "demembree" && beneficiaire.usufruitier && (
                     <div className="mb-4 p-3 bg-amber-50 rounded-lg">
                       <h5 className="font-medium mb-2 text-amber-800">
                         📊 Usufruitier de référence (détermine la répartition)
@@ -305,7 +285,7 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                         <div>
                           <Label>Nom de l'usufruitier</Label>
                           <Input
-                            value={beneficiaire.usufruitier?.nom || ""}
+                            value={beneficiaire.usufruitier.nom}
                             onChange={(e) => handleUsufruitierChange(index, "nom", e.target.value)}
                             placeholder="Ex: Jean Dupont"
                           />
@@ -314,7 +294,7 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                           <Label>Âge de l'usufruitier</Label>
                           <Input
                             type="number"
-                            value={beneficiaire.usufruitier?.age || ""}
+                            value={beneficiaire.usufruitier.age}
                             onChange={(e) => handleUsufruitierChange(index, "age", e.target.value)}
                             placeholder="Ex: 65"
                           />
@@ -322,7 +302,7 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                         <div>
                           <Label>Lien de parenté usufruitier</Label>
                           <select
-                            value={beneficiaire.usufruitier?.lienParente || "conjoint"}
+                            value={beneficiaire.usufruitier.lienParente}
                             onChange={(e) => handleUsufruitierChange(index, "lienParente", e.target.value)}
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                           >
