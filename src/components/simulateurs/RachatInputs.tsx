@@ -11,7 +11,7 @@ type Props = {
     anciennete: "moins8" | "plus8";
     modeTMI: "manuel" | "automatique";
     tmi: string;
-    rfr: string;
+    revenuNetImposable: string;
     foyer: string;
   };
   onChange: (name: string, value: string) => void;
@@ -91,7 +91,7 @@ const RachatInputs: React.FC<Props> = ({ values, onChange }) => {
             }`}
             onClick={() => onChange("modeTMI", "automatique")}
           >
-            Revenu fiscal de référence
+            Revenu net imposable
           </button>
         </div>
       </div>
@@ -113,15 +113,15 @@ const RachatInputs: React.FC<Props> = ({ values, onChange }) => {
       ) : (
         <>
           <div>
-            <Label htmlFor="rfr">RFR (€)</Label>
+            <Label htmlFor="revenuNetImposable">Revenu net imposable (€)</Label>
             <Input
               type="number"
-              id="rfr"
+              id="revenuNetImposable"
               min={0}
               placeholder="Ex : 38 000"
-              value={values.rfr}
+              value={values.revenuNetImposable}
               inputMode="decimal"
-              onChange={(e) => onChange("rfr", e.target.value)}
+              onChange={(e) => onChange("revenuNetImposable", e.target.value)}
             />
           </div>
           <div>
@@ -143,3 +143,4 @@ const RachatInputs: React.FC<Props> = ({ values, onChange }) => {
 };
 
 export default RachatInputs;
+
