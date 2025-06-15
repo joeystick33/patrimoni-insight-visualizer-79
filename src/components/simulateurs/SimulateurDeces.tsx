@@ -16,7 +16,12 @@ const initialValues = {
       lienParente: "conjoint" as "conjoint" | "enfant" | "petit-enfant" | "frere-soeur" | "neveu-niece" | "autre",
       age: "",
       quotite: "100",
-      typeClause: "pleine-propriete" as "pleine-propriete" | "usufruit" | "nue-propriete"
+      typeClause: "pleine-propriete" as "pleine-propriete" | "usufruit" | "nue-propriete",
+      usufruitier: {
+        nom: "",
+        age: "",
+        lienParente: "conjoint" as "conjoint" | "enfant" | "petit-enfant" | "frere-soeur" | "neveu-niece" | "autre"
+      }
     }
   ]
 };
