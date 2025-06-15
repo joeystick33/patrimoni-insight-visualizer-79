@@ -5,6 +5,15 @@ import {
   ChartLegendContent,
   ChartTooltipContent,
 } from "@/components/ui/chart";
+import {
+  BarChart,
+  XAxis,
+  YAxis,
+  Bar,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 type Props = {
   montantRachat: number;
@@ -35,14 +44,6 @@ const RachatResultats: React.FC<Props> = ({ montantRachat, resultats }) => {
       "Prélèv. sociaux": resultats.pso,
     },
   ];
-
-  // Import BarChart etc dynamically from 'recharts' (they are expected as such by the ChartContainer)
-  // ChartContainer just provides a styled wrapper, so we can use recharts components directly here.
-  // (If ChartContainer is a custom wrapper with a render function, remove the render function in favor of direct child usage)
-
-  // Import directly here since ChartContainer doesn't pass them as props
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { BarChart, XAxis, YAxis, Bar, Tooltip, Legend, ResponsiveContainer } = require("recharts");
 
   return (
     <div className="mt-8 flex flex-col items-center gap-6">
