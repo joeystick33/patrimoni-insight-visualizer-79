@@ -1,3 +1,4 @@
+
 import React from "react";
 import {
   ChartContainer,
@@ -292,7 +293,7 @@ const RachatResultats: React.FC<Props> = ({ montantRachat, resultats, parts, sta
           <p><strong>Choix fiscal :</strong> Vous pouvez opter pour le PFU (30% forfaitaire) ou le barème progressif de l'IR + prélèvements sociaux.</p>
           <p><strong>Abattement après 8 ans :</strong> 4 600 € (célibataire) ou 9 200 € (couple) applicable uniquement sur l'impôt sur le revenu, pas sur les prélèvements sociaux.</p>
           <p><strong>Impact RFR :</strong> Les intérêts s'ajoutent au revenu fiscal de référence quel que soit le mode d'imposition, pouvant impacter l'éligibilité à certaines aides.</p>
-          <p><strong>Optimisation :</strong> Pour les TMI élevées (≥30%) et contrats de plus de 8 ans, le barème IR est souvent plus favorable.</p>
+          <p><strong>Optimisation :</strong> L'option la plus avantageuse dépend du rapport entre l'abattement et les intérêts imposables. Une TMI élevée n'est favorable qu'si l'abattement couvre une part importante des intérêts.</p>
         </div>
       </div>
     </div>

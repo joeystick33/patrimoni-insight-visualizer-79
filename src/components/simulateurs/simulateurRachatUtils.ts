@@ -1,4 +1,3 @@
-
 export type RachatInputs = {
   valeurContrat: number;
   versements: number;
@@ -107,8 +106,14 @@ export function calculRachat(inputs: RachatInputs): RachatResultats {
     conseils.push(`Avec ${partInterets.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} € d'intérêts et un abattement de ${abattement.toLocaleString("fr-FR")} €, une partie reste imposable.`);
   }
 
-  if (tmi >= 30 && anciennete === "plus8") {
-    conseils.push("TMI élevée : le barème IR sera souvent plus favorable que le PFU grâce à l'abattement après 8 ans.");
+  // Conseil corrigé : ne plus donner de conseil généralisant sur TMI élevée
+  if (anciennete === "plus8" && abattement > 0) {
+    const ratioAbattement = (abattement / partInterets) * 100;
+    if (ratioAbattement >= 50) {
+      conseils.push("L'abattement couvre une part importante des intérêts : le barème IR pourrait être avantageux selon votre TMI.");
+    } else {
+      conseils.push("L'abattement ne couvre qu'une faible part des intérêts : comparez attentivement les deux options.");
+    }
   }
 
   // Impact sur le RFR
