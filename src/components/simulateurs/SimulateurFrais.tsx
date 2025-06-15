@@ -34,7 +34,7 @@ const defaultParams = {
   fraisGestionEuros: 0.6,
   fraisGestionUC: 0.8,
   fraisGestionGSM: 1.9,
-  fraisEntree: 2,
+  fraisSurVersement: 2,
   fraisArbitrage: 0.5,
   nbArbitragesParAn: 1,
 };
@@ -77,19 +77,19 @@ const SimulateurFrais = () => {
     setError("");
   };
 
-  // AMÉLIORATION : Calcul plus précis avec frais d'entrée et d'arbitrage
+  // AMÉLIORATION : Calcul plus précis avec frais sur versements et d'arbitrage
   function calcSimu(withFees: boolean) {
     let capital = params.versementInitial;
     let data = [];
-    let totalFraisEntree = 0;
+    let totalFraisSurVersement = 0;
     let totalFraisGestion = 0;
     let totalFraisArbitrage = 0;
 
-    // Frais d'entrée sur versement initial
+    // Frais sur versement initial
     if (withFees) {
-      const fraisEntreeInitial = params.versementInitial * (params.fraisEntree / 100);
-      capital -= fraisEntreeInitial;
-      totalFraisEntree += fraisEntreeInitial;
+      const fraisSurVersementInitial = params.versementInitial * (params.fraisSurVersement / 100);
+      capital -= fraisSurVersementInitial;
+      totalFraisSurVersement += fraisSurVersementInitial;
     }
 
     for (let mois = 1; mois <= params.duree * 12; mois++) {
@@ -132,11 +132,11 @@ const SimulateurFrais = () => {
       if (params.versementMensuel > 0) {
         let versement = params.versementMensuel;
         
-        // Frais d'entrée sur versements mensuels
+        // Frais sur versements mensuels
         if (withFees) {
-          const fraisEntreeMensuel = versement * (params.fraisEntree / 100);
-          versement -= fraisEntreeMensuel;
-          totalFraisEntree += fraisEntreeMensuel;
+          const fraisSurVersementMensuel = versement * (params.fraisSurVersement / 100);
+          versement -= fraisSurVersementMensuel;
+          totalFraisSurVersement += fraisSurVersementMensuel;
         }
         
         capital += versement;
@@ -145,7 +145,7 @@ const SimulateurFrais = () => {
       data.push({ 
         mois, 
         capital,
-        totalFraisEntree: withFees ? totalFraisEntree : 0,
+        totalFraisSurVersement: withFees ? totalFraisSurVersement : 0,
         totalFraisGestion: withFees ? totalFraisGestion : 0,
         totalFraisArbitrage: withFees ? totalFraisArbitrage : 0
       });
@@ -153,10 +153,10 @@ const SimulateurFrais = () => {
 
     return {
       data,
-      totalFraisEntree,
+      totalFraisSurVersement,
       totalFraisGestion,
       totalFraisArbitrage,
-      totalFrais: totalFraisEntree + totalFraisGestion + totalFraisArbitrage
+      totalFrais: totalFraisSurVersement + totalFraisGestion + totalFraisArbitrage
     };
   }
 
@@ -185,7 +185,7 @@ const SimulateurFrais = () => {
         rendementSansFrais,
         rendementAvecFrais,
         impactSurRendement,
-        totalFraisEntree: avecFrais.totalFraisEntree,
+        totalFraisSurVersement: avecFrais.totalFraisSurVersement,
         totalFraisGestion: avecFrais.totalFraisGestion,
         totalFraisArbitrage: avecFrais.totalFraisArbitrage,
         totalFrais: avecFrais.totalFrais
@@ -207,7 +207,7 @@ const SimulateurFrais = () => {
 
   // Données pour le graphique des frais
   const fraisData = resultats ? [
-    { name: "Frais d'entrée", value: resultats.totalFraisEntree },
+    { name: "Frais sur versements", value: resultats.totalFraisSurVersement },
     { name: "Frais de gestion", value: resultats.totalFraisGestion },
     { name: "Frais d'arbitrage", value: resultats.totalFraisArbitrage },
   ].filter(item => item.value > 0) : [];
@@ -382,16 +382,17 @@ const SimulateurFrais = () => {
               />
             </div>
             <div>
-              <Label htmlFor="fraisEntree">Frais d'entrée (%)</Label>
+              <Label htmlFor="fraisSurVersement">Frais sur versements (%)</Label>
               <Input
                 type="number"
-                id="fraisEntree"
+                id="fraisSurVersement"
                 min={0}
                 max={5}
                 step={0.1}
-                value={params.fraisEntree}
-                onChange={(e) => handleChange("fraisEntree", parseFloat(e.target.value))}
+                value={params.fraisSurVersement}
+                onChange={(e) => handleChange("fraisSurVersement", parseFloat(e.target.value))}
               />
+              <p className="text-xs text-gray-500 mt-1">Appliqués sur chaque versement (initial et mensuels)</p>
             </div>
             <div>
               <Label htmlFor="fraisArbitrage">Frais d'arbitrage (%)</Label>
@@ -512,7 +513,7 @@ const SimulateurFrais = () => {
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
                   <h4 className="font-semibold text-blue-800 mb-2">🎯 Conseils d'optimisation</h4>
                   <ul className="space-y-1 text-blue-700">
-                    <li>• Négociez les frais d'entrée, souvent évitables</li>
+                    <li>• Négociez les frais sur versements, souvent évitables</li>
                     <li>• Limitez les arbitrages fréquents</li>
                     <li>• Privilégiez les supports avec frais réduits</li>
                     <li>• Considérez l'allocation UC/€ selon votre horizon</li>
