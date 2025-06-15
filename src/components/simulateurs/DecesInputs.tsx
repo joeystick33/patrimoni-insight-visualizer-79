@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -87,9 +86,16 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
     onChange("beneficiaires", [...values.beneficiaires, newUsufruitier]);
   };
 
+  // Ajuste la création d'un nu-propriétaire pour les clauses démembrées
   const addNuProprietaire = () => {
-    const newNuProprietaire = createBeneficiaireTemplate("nue-propriete");
-    onChange("beneficiaires", [...values.beneficiaires, newNuProprietaire]);
+    const baseBeneficiaire = {
+      nom: "",
+      lienParente: "enfant" as const,
+      age: "",
+      quotite: "0",
+      typeClause: "nue-propriete" as const,
+    };
+    onChange("beneficiaires", [...values.beneficiaires, baseBeneficiaire]);
   };
 
   const addBeneficiaire = () => {
@@ -300,24 +306,19 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
             </Card>
           )}
 
+          {/* Liste des bénéficiaires */}
           {(values.clauseType === "personnalisee" || values.clauseType === "demembree") && (
             <div className="space-y-4">
               <div className="flex justify-between items-center flex-wrap gap-2">
                 <h4 className="font-semibold">
-                  {values.clauseType === "demembree" ? "Usufruitiers et Nu-propriétaires" : "Bénéficiaires"}
+                  {values.clauseType === "demembree" ? "Nu-propriétaires" : "Bénéficiaires"}
                 </h4>
                 <div className="flex gap-2">
                   {values.clauseType === "demembree" ? (
-                    <>
-                      <Button type="button" variant="outline" size="sm" onClick={addUsufruitier}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Ajouter usufruitier
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={addNuProprietaire}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Ajouter nu-propriétaire
-                      </Button>
-                    </>
+                    <Button type="button" variant="outline" size="sm" onClick={addNuProprietaire}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Ajouter un nu-propriétaire
+                    </Button>
                   ) : (
                     <Button type="button" variant="outline" size="sm" onClick={addBeneficiaire}>
                       <Plus className="w-4 h-4 mr-2" />
@@ -327,22 +328,16 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                 </div>
               </div>
               
-              {values.beneficiaires.map((beneficiaire, index) => (
+              {/* Pour démembrée : uniquement des nu-propriétaires */}
+              {values.beneficiaires
+                .filter(b => values.clauseType !== "demembree" || b.typeClause === "nue-propriete")
+                .map((beneficiaire, index) => (
                 <Card key={index} className="p-4">
-                  {values.clauseType === "demembree" && (
-                    <div className="mb-4 p-2 bg-slate-100 rounded">
-                      <span className="text-sm font-medium">
-                        {beneficiaire.typeClause === "usufruit" ? "👤 Usufruitier" : "🏠 Nu-propriétaire"}
-                      </span>
-                    </div>
-                  )}
-
+                  {/* Pour démembrée, plus d'encart "Usufruitier" */}
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                       <Label>
-                        {values.clauseType === "demembree" && beneficiaire.typeClause === "usufruit" 
-                          ? "Nom usufruitier" 
-                          : values.clauseType === "demembree" && beneficiaire.typeClause === "nue-propriete"
+                        {values.clauseType === "demembree"
                           ? "Nom nu-propriétaire" 
                           : "Nom/Prénom"}
                       </Label>
