@@ -12,7 +12,7 @@ const initialValues = {
   anciennete: "moins8" as "moins8" | "plus8",
   modeTMI: "manuel" as "manuel" | "automatique",
   tmi: "",
-  rfr: "",
+  revenuNetImposable: "",
   foyer: "1",
 };
 
@@ -30,18 +30,32 @@ const SimulateurRachat: React.FC = () => {
   // Reset
   const handleReset = () => setValues(initialValues);
 
-  // Conversion et fallback automatique pour la TMI si mode auto (ici: démo, hardcodé à 30% si auto; à remplacer par vrai calcul si besoin)
-  const tmiValue =
-    values.modeTMI === "manuel"
-      ? parseFloat(values.tmi || "0")
-      : 30; // TODO: Mettre calcul TMI par RFR si demandé
+  // Calcul automatique de la TMI basé sur le revenu net imposable et le nombre de parts
+  const calculateTMI = (revenuNetImposable: number, foyer: number): number => {
+    const quotientFamilial = revenuNetImposable / foyer;
+    
+    // Barème 2024 (simplifié)
+    if (quotientFamilial <= 11294) return 0;
+    if (quotientFamilial <= 28797) return 11;
+    if (quotientFamilial <= 82341) return 30;
+    if (quotientFamilial <= 177106) return 41;
+    return 45;
+  };
+
+  // TMI : soit manuelle, soit calculée automatiquement
+  const tmiValue = values.modeTMI === "manuel" 
+    ? parseFloat(values.tmi || "0")
+    : calculateTMI(
+        parseFloat(values.revenuNetImposable || "0"), 
+        Number(values.foyer) || 1
+      );
 
   // Calculs seulement si tous les champs obligatoires sont remplis
   const ready =
     !!values.valeurContrat &&
     !!values.versements &&
     !!values.montantRachat &&
-    tmiValue > 0;
+    (values.modeTMI === "manuel" ? !!values.tmi : !!values.revenuNetImposable);
 
   let resultats;
   if (ready) {

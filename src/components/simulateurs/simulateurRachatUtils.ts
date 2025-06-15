@@ -6,7 +6,7 @@ export type RachatInputs = {
   anciennete: "moins8" | "plus8";
   modeTMI: "manuel" | "automatique";
   tmi: number; // En % (ex: 30)
-  foyer: number; // Nombre de parts fiscales, pour gérer l’abattement couple
+  foyer: number; // Nombre de parts fiscales
 };
 
 export type RachatResultats = {
@@ -21,9 +21,21 @@ export type RachatResultats = {
 };
 
 /**
- * Calcule toutes les valeurs utiles selon la fiscalité française de l'assurance vie.
- * - PFU : jamais d'abattement, toujours sur la totalité de la part d'intérêts.
- * - Barème IR : abattement de 4600 € (ou 9200 si couple), uniquement si +8 ans.
+ * Calcule la fiscalité du rachat d'assurance vie selon les règles françaises :
+ * 
+ * PFU (Prélèvement Forfaitaire Unique) :
+ * - 12,8% d'impôt + 17,2% de prélèvements sociaux
+ * - Pas d'abattement, même après 8 ans
+ * - S'applique sur la totalité de la part d'intérêts
+ * 
+ * Barème IR (Impôt sur le Revenu) :
+ * - Taux marginal d'imposition + 17,2% de prélèvements sociaux
+ * - Après 8 ans : abattement de 4600€ (célibataire) ou 9200€ (couple)
+ * - L'abattement ne s'applique QUE sur la part soumise à l'IR, pas aux prélèvements sociaux
+ * 
+ * Impact RFR :
+ * - La part d'intérêts imposable s'ajoute au RFR dans tous les cas
+ * - Cela peut impacter l'éligibilité aux aides sociales, bourses, etc.
  */
 export function calculRachat(inputs: RachatInputs): RachatResultats {
   const {
@@ -35,43 +47,40 @@ export function calculRachat(inputs: RachatInputs): RachatResultats {
     foyer,
   } = inputs;
 
-  // Part d’intérêts imposable
+  // 1. Calcul de la part d'intérêts imposable
   const partInterets = Math.max(
     0,
     (valeurContrat - versements) * (montantRachat / valeurContrat)
   );
 
-  // Prélèvements sociaux (toujours 17,2 % sur part intérêts)
+  // 2. Prélèvements sociaux (17,2%) - toujours sur la totalité des intérêts
   const pso = partInterets * 0.172;
 
-  // PFU (12,8%) - jamais d'abattement
+  // 3. OPTION PFU : 12,8% sur la totalité des intérêts (pas d'abattement)
   const impotPFU = partInterets * 0.128;
+  const netPFU = montantRachat - (impotPFU + pso);
 
-  // Abattement barème IR si +8 ans, selon nombre de parts
+  // 4. OPTION BARÈME IR : abattement uniquement si contrat > 8 ans
   let abattement = 0;
   if (anciennete === "plus8") {
     abattement = foyer >= 2 ? 9200 : 4600;
   }
 
-  // Barème IR : TMI × part après abattement seulement
-  let baseIR = Math.max(0, partInterets - abattement);
-  const impotIR = baseIR * (tmi / 100);
-
-  // Net après impôt
-  const netPFU = montantRachat - (impotPFU + pso);
+  // Base imposable IR après abattement (mais PSO reste sur la totalité)
+  const baseImposableIR = Math.max(0, partInterets - abattement);
+  const impotIR = baseImposableIR * (tmi / 100);
   const netIR = montantRachat - (impotIR + pso);
 
+  // 5. Recommandation fiscale
   let message = undefined;
-  // Suggestion : si baseIR == 0, le barème IR est forcément le plus avantageux fiscalement (zéro impôt)
-  if (baseIR === 0) {
-    message =
-      "Le barème IR est le plus avantageux dans votre cas, car la base imposable (après abattement) est nulle : seuls les prélèvements sociaux sont dus.";
+  if (baseImposableIR === 0) {
+    message = "Le barème IR est le plus avantageux : aucun impôt sur le revenu à payer grâce à l'abattement (seuls les prélèvements sociaux restent dus).";
+  } else if (netPFU > netIR) {
+    message = "Le PFU (prélèvement forfaitaire unique) est plus avantageux dans votre situation.";
   } else if (netIR > netPFU) {
-    message =
-      "Le PFU (prélèvement forfaitaire unique, flat tax) est plus avantageux dans votre cas.";
-  } else if (netIR < netPFU) {
-    message =
-      "Le barème IR est plus avantageux dans votre cas (hors prélèvements sociaux).";
+    message = "Le barème IR est plus avantageux dans votre situation.";
+  } else {
+    message = "Les deux options donnent le même résultat net.";
   }
 
   return {
