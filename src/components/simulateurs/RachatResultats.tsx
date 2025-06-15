@@ -1,3 +1,4 @@
+
 import React from "react";
 import {
   ChartContainer,
@@ -35,6 +36,14 @@ const RachatResultats: React.FC<Props> = ({ montantRachat, resultats }) => {
     },
   ];
 
+  // Import BarChart etc dynamically from 'recharts' (they are expected as such by the ChartContainer)
+  // ChartContainer just provides a styled wrapper, so we can use recharts components directly here.
+  // (If ChartContainer is a custom wrapper with a render function, remove the render function in favor of direct child usage)
+
+  // Import directly here since ChartContainer doesn't pass them as props
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { BarChart, XAxis, YAxis, Bar, Tooltip, Legend, ResponsiveContainer } = require("recharts");
+
   return (
     <div className="mt-8 flex flex-col items-center gap-6">
       <div className="w-full max-w-xl">
@@ -46,7 +55,7 @@ const RachatResultats: React.FC<Props> = ({ montantRachat, resultats }) => {
           }}
           className="bg-white dark:bg-slate-900 rounded-xl p-3"
         >
-          {({ BarChart, XAxis, YAxis, Bar, Tooltip, Legend, ResponsiveContainer }) => (
+          <ResponsiveContainer width="100%" height={260}>
             <BarChart data={data}>
               <XAxis dataKey="name" />
               <YAxis />
@@ -56,7 +65,7 @@ const RachatResultats: React.FC<Props> = ({ montantRachat, resultats }) => {
               <Bar dataKey="Impôt" stackId="a" />
               <Bar dataKey="Prélèv. sociaux" stackId="a" />
             </BarChart>
-          )}
+          </ResponsiveContainer>
         </ChartContainer>
       </div>
       <div className="grid gap-3 w-full max-w-xl">
