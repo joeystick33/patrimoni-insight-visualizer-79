@@ -17,25 +17,27 @@ export type RachatResultats = {
   abattement: number;
   netPFU: number;
   netIR: number;
+  tauxImpositionPFU: number;
+  tauxImpositionIR: number;
+  economiePFU: number;
+  economieIR: number;
   message?: string;
+  alertes?: string[];
+  conseils?: string[];
 };
 
 /**
- * Calcule la fiscalité du rachat d'assurance vie selon les règles françaises :
+ * AMÉLIORÉ : Calcule la fiscalité du rachat d'assurance vie selon les règles françaises 2024
  * 
- * PFU (Prélèvement Forfaitaire Unique) :
- * - 12,8% d'impôt + 17,2% de prélèvements sociaux
+ * Article 125-0 A du CGI - Prélèvement Forfaitaire Unique (PFU) :
+ * - 12,8% d'impôt + 17,2% de prélèvements sociaux = 30% total
  * - Pas d'abattement, même après 8 ans
  * - S'applique sur la totalité de la part d'intérêts
  * 
- * Barème IR (Impôt sur le Revenu) :
+ * Article 150-0 A du CGI - Barème progressif de l'IR :
  * - Taux marginal d'imposition + 17,2% de prélèvements sociaux
  * - Après 8 ans : abattement de 4600€ (célibataire) ou 9200€ (couple)
  * - L'abattement ne s'applique QUE sur la part soumise à l'IR, pas aux prélèvements sociaux
- * 
- * Impact RFR :
- * - La part d'intérêts imposable s'ajoute au RFR dans tous les cas
- * - Cela peut impacter l'éligibilité aux aides sociales, bourses, etc.
  */
 export function calculRachat(inputs: RachatInputs): RachatResultats {
   const {
@@ -47,11 +49,18 @@ export function calculRachat(inputs: RachatInputs): RachatResultats {
     foyer,
   } = inputs;
 
-  // 1. Calcul de la part d'intérêts imposable
-  const partInterets = Math.max(
-    0,
-    (valeurContrat - versements) * (montantRachat / valeurContrat)
-  );
+  // Validation des données
+  if (montantRachat > valeurContrat) {
+    throw new Error("Le montant du rachat ne peut pas dépasser la valeur du contrat");
+  }
+  
+  if (versements > valeurContrat) {
+    throw new Error("Le montant des versements ne peut pas dépasser la valeur du contrat");
+  }
+
+  // 1. Calcul de la part d'intérêts imposable (prorata du rachat)
+  const totalInteret = Math.max(0, valeurContrat - versements);
+  const partInterets = totalInteret * (montantRachat / valeurContrat);
 
   // 2. Prélèvements sociaux (17,2%) - toujours sur la totalité des intérêts
   const pso = partInterets * 0.172;
@@ -59,28 +68,61 @@ export function calculRachat(inputs: RachatInputs): RachatResultats {
   // 3. OPTION PFU : 12,8% sur la totalité des intérêts (pas d'abattement)
   const impotPFU = partInterets * 0.128;
   const netPFU = montantRachat - (impotPFU + pso);
+  const tauxImpositionPFU = montantRachat > 0 ? ((impotPFU + pso) / montantRachat) * 100 : 0;
 
   // 4. OPTION BARÈME IR : abattement uniquement si contrat > 8 ans
   let abattement = 0;
   if (anciennete === "plus8") {
     abattement = foyer >= 2 ? 9200 : 4600;
+    abattement = Math.min(abattement, partInterets); // L'abattement ne peut pas dépasser les intérêts
   }
 
   // Base imposable IR après abattement (mais PSO reste sur la totalité)
   const baseImposableIR = Math.max(0, partInterets - abattement);
   const impotIR = baseImposableIR * (tmi / 100);
   const netIR = montantRachat - (impotIR + pso);
+  const tauxImpositionIR = montantRachat > 0 ? ((impotIR + pso) / montantRachat) * 100 : 0;
 
-  // 5. Recommandation fiscale
-  let message = undefined;
-  if (baseImposableIR === 0) {
-    message = "Le barème IR est le plus avantageux : aucun impôt sur le revenu à payer grâce à l'abattement (seuls les prélèvements sociaux restent dus).";
+  // 5. Calcul des économies par rapport à l'option la moins favorable
+  const coutTotalPFU = impotPFU + pso;
+  const coutTotalIR = impotIR + pso;
+  const economiePFU = Math.max(0, coutTotalIR - coutTotalPFU);
+  const economieIR = Math.max(0, coutTotalPFU - coutTotalIR);
+
+  // 6. Messages et conseils
+  const alertes: string[] = [];
+  const conseils: string[] = [];
+  let message = "";
+
+  if (partInterets === 0) {
+    message = "Aucun intérêt à déclarer : le montant des versements est égal ou supérieur à la valeur du contrat.";
+  } else if (baseImposableIR === 0 && anciennete === "plus8") {
+    message = "Le barème IR est optimal : aucun impôt sur le revenu grâce à l'abattement (seuls les prélèvements sociaux de 17,2% sont dus).";
+    conseils.push(`Économie de ${economiePFU.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} € par rapport au PFU.`);
   } else if (netPFU > netIR) {
-    message = "Le PFU (prélèvement forfaitaire unique) est plus avantageux dans votre situation.";
+    message = `Le PFU est plus avantageux : +${(netPFU - netIR).toLocaleString("fr-FR", { maximumFractionDigits: 0 })} € net.`;
   } else if (netIR > netPFU) {
-    message = "Le barème IR est plus avantageux dans votre situation.";
+    message = `Le barème IR est plus avantageux : +${(netIR - netPFU).toLocaleString("fr-FR", { maximumFractionDigits: 0 })} € net.`;
   } else {
     message = "Les deux options donnent le même résultat net.";
+  }
+
+  // Alertes et conseils supplémentaires
+  if (anciennete === "moins8" && partInterets > 4600) {
+    alertes.push("Contrat de moins de 8 ans : aucun abattement applicable. Considérez attendre l'ancienneté de 8 ans.");
+  }
+
+  if (partInterets > abattement && anciennete === "plus8") {
+    conseils.push(`Avec ${partInterets.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} € d'intérêts et un abattement de ${abattement.toLocaleString("fr-FR")} €, une partie reste imposable.`);
+  }
+
+  if (tmi >= 30 && anciennete === "plus8") {
+    conseils.push("TMI élevée : le barème IR sera souvent plus favorable que le PFU grâce à l'abattement après 8 ans.");
+  }
+
+  // Impact sur le RFR
+  if (partInterets > 0) {
+    conseils.push(`Impact RFR : les ${partInterets.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} € d'intérêts s'ajouteront à votre revenu fiscal de référence, quel que soit le mode d'imposition choisi.`);
   }
 
   return {
@@ -91,6 +133,12 @@ export function calculRachat(inputs: RachatInputs): RachatResultats {
     abattement,
     netPFU,
     netIR,
+    tauxImpositionPFU,
+    tauxImpositionIR,
+    economiePFU,
+    economieIR,
     message,
+    alertes,
+    conseils,
   };
 }

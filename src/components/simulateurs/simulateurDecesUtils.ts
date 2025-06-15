@@ -28,11 +28,15 @@ interface ResultatBeneficiaire {
   impotApres70: number;
   impotTotal: number;
   montantNet: number;
+  tauxImposition: number;
 }
 
-// Barèmes des droits de succession selon le lien de parenté (art. 757 B)
+// Barèmes des droits de succession selon le lien de parenté - CORRECTION : Barèmes 2024
 const baremesSuccession = {
-  "conjoint": { abattement: 80724, taux: [{ seuil: 0, taux: 0 }] }, // Exonération totale
+  "conjoint": { 
+    abattement: 80724, 
+    taux: [{ seuil: 0, taux: 0 }] // Exonération totale pour conjoints/partenaires PACS
+  }, 
   "enfant": { 
     abattement: 100000, 
     taux: [
@@ -76,7 +80,7 @@ const baremesSuccession = {
 
 function calculerImpotSuccession(montant: number, lienParente: string): number {
   const bareme = baremesSuccession[lienParente as keyof typeof baremesSuccession];
-  if (!bareme) return montant * 0.60; // Taux maximum par défaut
+  if (!bareme) return montant * 0.60;
 
   let impot = 0;
   let montantRestant = Math.max(0, montant - bareme.abattement);
@@ -92,7 +96,6 @@ function calculerImpotSuccession(montant: number, lienParente: string): number {
       
       if (montantRestant <= 0) break;
     } else {
-      // Dernière tranche
       impot += montantRestant * tranche.taux;
       break;
     }
@@ -101,6 +104,7 @@ function calculerImpotSuccession(montant: number, lienParente: string): number {
   return impot;
 }
 
+// CORRECTION : Calcul impôt 990 I avec les bons taux 2024
 function calculerImpot990I(montantImposable: number): number {
   if (montantImposable <= 0) return 0;
   if (montantImposable <= 700000) return montantImposable * 0.20;
@@ -110,11 +114,20 @@ function calculerImpot990I(montantImposable: number): number {
 export function calculDeces(params: ParametresDeces) {
   const { valeurContrat, primesAvant70, primesApres70, beneficiaires } = params;
   
-  // Calcul des produits (plus-values)
+  // Validation des données
+  if (valeurContrat <= 0 || primesAvant70 < 0 || primesApres70 < 0) {
+    throw new Error("Les montants doivent être positifs");
+  }
+  
   const totalPrimes = primesAvant70 + primesApres70;
+  if (totalPrimes > valeurContrat) {
+    throw new Error("Le total des primes ne peut pas dépasser la valeur du contrat");
+  }
+  
+  // Calcul des produits (plus-values)
   const produits = valeurContrat - totalPrimes;
-  const produitAvant70 = (produits * primesAvant70) / totalPrimes;
-  const produitApres70 = (produits * primesApres70) / totalPrimes;
+  const produitAvant70 = totalPrimes > 0 ? (produits * primesAvant70) / totalPrimes : 0;
+  const produitApres70 = totalPrimes > 0 ? (produits * primesApres70) / totalPrimes : 0;
 
   // Abattement global article 757 B (30 500 €)
   const abattementGlobal757B = 30500;
@@ -140,7 +153,7 @@ export function calculDeces(params: ParametresDeces) {
 
     // Article 757 B (primes après 70 ans seulement)
     let abattementApres70 = 0;
-    let imposableApres70 = partPrimesApres70; // Seules les primes sont imposables
+    let imposableApres70 = partPrimesApres70;
     let impotApres70 = 0;
 
     if (abattementRestant757B > 0 && partPrimesApres70 > 0) {
@@ -155,6 +168,7 @@ export function calculDeces(params: ParametresDeces) {
 
     const impotTotal = impotAvant70 + impotApres70;
     const montantNet = montantBrut - impotTotal;
+    const tauxImposition = montantBrut > 0 ? (impotTotal / montantBrut) * 100 : 0;
 
     return {
       nom: beneficiaire.nom,
@@ -169,7 +183,8 @@ export function calculDeces(params: ParametresDeces) {
       impotAvant70,
       impotApres70,
       impotTotal,
-      montantNet
+      montantNet,
+      tauxImposition
     };
   });
 
@@ -177,31 +192,40 @@ export function calculDeces(params: ParametresDeces) {
   const totalTransmis = valeurContrat;
   const totalImpots = resultats.reduce((sum, r) => sum + r.impotTotal, 0);
   const totalNet = resultats.reduce((sum, r) => sum + r.montantNet, 0);
+  const tauxImpositionGlobal = totalTransmis > 0 ? (totalImpots / totalTransmis) * 100 : 0;
 
-  // Génération des conseils d'optimisation
+  // AMÉLIORATION : Conseils d'optimisation plus précis
   const optimisations: string[] = [];
   const alertes: string[] = [];
 
   // Vérification des abattements non utilisés
-  const abattementsNonUtilises = resultats.filter(r => r.abattementAvant70 < 152500).length;
-  if (abattementsNonUtilises > 0) {
-    optimisations.push(`${abattementsNonUtilises} bénéficiaire(s) n'utilisent pas la totalité de leur abattement de 152 500 €. Considérez une répartition plus équilibrée.`);
+  const beneficiairesAbattementNonUtilise = resultats.filter(r => r.abattementAvant70 < 152500);
+  if (beneficiairesAbattementNonUtilise.length > 0) {
+    optimisations.push(`${beneficiairesAbattementNonUtilise.length} bénéficiaire(s) n'utilisent pas la totalité de leur abattement 990 I (152 500 €). Considérez une répartition plus équitable.`);
   }
 
-  // Alerte si forte imposition
-  const tauxImpositionMoyen = (totalImpots / totalTransmis) * 100;
-  if (tauxImpositionMoyen > 15) {
-    alertes.push(`Taux d'imposition élevé (${tauxImpositionMoyen.toFixed(1)}%). Envisagez des stratégies d'optimisation.`);
-  }
-
-  // Conseil sur les versements après 70 ans
+  // Optimisation versements après 70 ans
   if (primesApres70 > abattementGlobal757B) {
-    optimisations.push("Les primes versées après 70 ans dépassent l'abattement global. Privilégiez les versements avant 70 ans pour optimiser la fiscalité.");
+    const exces = primesApres70 - abattementGlobal757B;
+    optimisations.push(`Les primes après 70 ans (${primesApres70.toLocaleString()} €) dépassent l'abattement global de ${abattementGlobal757B.toLocaleString()} € de ${exces.toLocaleString()} €. Privilégiez les versements avant 70 ans.`);
   }
 
-  // Alerte clause standard potentiellement défavorable
-  if (params.clauseType === "standard" && beneficiaires.length === 1 && beneficiaires[0].lienParente === "conjoint") {
-    alertes.push("Avec une clause standard, vérifiez que la répartition correspond bien à vos souhaits en cas de famille recomposée.");
+  // Alerte taux d'imposition élevé
+  if (tauxImpositionGlobal > 20) {
+    alertes.push(`Taux d'imposition global élevé (${tauxImpositionGlobal.toFixed(1)}%). Envisagez des stratégies d'optimisation : démembrement, assurances croisées, donations, etc.`);
+  }
+
+  // Alerte bénéficiaire unique avec forte imposition
+  if (beneficiaires.length === 1 && resultats[0].tauxImposition > 15) {
+    optimisations.push("Avec un seul bénéficiaire, considérez la nomination de bénéficiaires multiples pour diluer l'imposition et utiliser plusieurs abattements.");
+  }
+
+  // Conseil clause standard
+  if (params.clauseType === "standard") {
+    if (beneficiaires.some(b => b.lienParente === "conjoint")) {
+      alertes.push("Avec une clause standard et un conjoint, vérifiez la situation en cas de famille recomposée (enfants d'un premier lit).");
+    }
+    optimisations.push("La clause standard peut être insuffisante dans certaines situations familiales. Considérez une clause personnalisée pour plus de précision.");
   }
 
   return {
@@ -209,6 +233,7 @@ export function calculDeces(params: ParametresDeces) {
     totalTransmis,
     totalImpots,
     totalNet,
+    tauxImpositionGlobal,
     optimisations,
     alertes
   };
