@@ -59,45 +59,41 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
   };
 
   const addBeneficiaire = () => {
-    const newBeneficiaires = [...values.beneficiaires, {
+    const newBeneficiaire = {
       nom: "",
       lienParente: "enfant" as const,
       age: "",
       quotite: "0",
-      typeClause: "pleine-propriete" as const
-    }];
-    onChange("beneficiaires", newBeneficiaires);
+      typeClause: values.clauseType === "demembree" ? "nue-propriete" as const : "pleine-propriete" as const
+    };
+
+    // Pour les clauses démembrées, on ajoute toujours l'usufruitier
+    if (values.clauseType === "demembree") {
+      newBeneficiaire.usufruitier = {
+        nom: "",
+        age: "",
+        lienParente: "conjoint" as const
+      };
+    }
+
+    onChange("beneficiaires", [...values.beneficiaires, newBeneficiaire]);
   };
 
-  const addClauseDemembree = () => {
-    const newBeneficiaires = [
-      ...values.beneficiaires,
-      {
+  const addUsufruitier = () => {
+    const newUsufruitier = {
+      nom: "",
+      lienParente: "conjoint" as const,
+      age: "",
+      quotite: "0",
+      typeClause: "usufruit" as const,
+      usufruitier: {
         nom: "",
-        lienParente: "enfant" as const,
         age: "",
-        quotite: "0",
-        typeClause: "usufruit" as const,
-        usufruitier: {
-          nom: "",
-          age: "",
-          lienParente: "conjoint" as const
-        }
-      },
-      {
-        nom: "",
-        lienParente: "enfant" as const,
-        age: "",
-        quotite: "0",
-        typeClause: "nue-propriete" as const,
-        usufruitier: {
-          nom: "",
-          age: "",
-          lienParente: "conjoint" as const
-        }
+        lienParente: "conjoint" as const
       }
-    ];
-    onChange("beneficiaires", newBeneficiaires);
+    };
+    
+    onChange("beneficiaires", [...values.beneficiaires, newUsufruitier]);
   };
 
   const removeBeneficiaire = (index: number) => {
@@ -114,6 +110,48 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
     // Si vide, on met automatiquement 0
     const finalValue = value === "" ? "0" : value;
     onChange("primesApres70", finalValue);
+  };
+
+  // Reset des bénéficiaires quand on change le type de clause
+  const handleClauseTypeChange = (newClauseType: string) => {
+    let newBeneficiaires;
+    
+    if (newClauseType === "standard") {
+      // Clause standard : un seul bénéficiaire générique
+      newBeneficiaires = [{
+        nom: "Clause standard",
+        lienParente: "conjoint" as const,
+        age: "",
+        quotite: "100",
+        typeClause: "pleine-propriete" as const
+      }];
+    } else if (newClauseType === "demembree") {
+      // Clause démembrée : usufruitier par défaut
+      newBeneficiaires = [{
+        nom: "",
+        lienParente: "conjoint" as const,
+        age: "",
+        quotite: "100",
+        typeClause: "usufruit" as const,
+        usufruitier: {
+          nom: "",
+          age: "",
+          lienParente: "conjoint" as const
+        }
+      }];
+    } else {
+      // Clause personnalisée : bénéficiaire en pleine propriété
+      newBeneficiaires = [{
+        nom: "",
+        lienParente: "enfant" as const,
+        age: "",
+        quotite: "100",
+        typeClause: "pleine-propriete" as const
+      }];
+    }
+    
+    onChange("clauseType", newClauseType);
+    onChange("beneficiaires", newBeneficiaires);
   };
 
   return (
@@ -182,7 +220,7 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                 name="clauseType"
                 value="standard"
                 checked={values.clauseType === "standard"}
-                onChange={(e) => onChange("clauseType", e.target.value)}
+                onChange={(e) => handleClauseTypeChange(e.target.value)}
               />
               <span>Standard : "mon conjoint, à défaut mes enfants vivants ou représentés"</span>
             </label>
@@ -192,7 +230,7 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                 name="clauseType"
                 value="personnalisee"
                 checked={values.clauseType === "personnalisee"}
-                onChange={(e) => onChange("clauseType", e.target.value)}
+                onChange={(e) => handleClauseTypeChange(e.target.value)}
               />
               <span>Personnalisée</span>
             </label>
@@ -202,25 +240,46 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                 name="clauseType"
                 value="demembree"
                 checked={values.clauseType === "demembree"}
-                onChange={(e) => onChange("clauseType", e.target.value)}
+                onChange={(e) => handleClauseTypeChange(e.target.value)}
               />
               <span>Démembrée (usufruit/nue-propriété)</span>
             </label>
           </div>
 
+          {values.clauseType === "demembree" && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h5 className="font-medium text-blue-800 mb-2">ℹ️ Clause démembrée</h5>
+              <p className="text-sm text-blue-700 mb-2">
+                Dans une clause démembrée, l'âge de l'usufruitier détermine automatiquement la répartition entre usufruit et nue-propriété selon le barème fiscal.
+              </p>
+              <p className="text-sm text-blue-600">
+                Les abattements fiscaux seront répartis au prorata entre usufruitier et nu-propriétaires.
+              </p>
+            </div>
+          )}
+
           {(values.clauseType === "personnalisee" || values.clauseType === "demembree") && (
             <div className="space-y-4">
               <div className="flex justify-between items-center flex-wrap gap-2">
-                <h4 className="font-semibold">Bénéficiaires</h4>
+                <h4 className="font-semibold">
+                  {values.clauseType === "demembree" ? "Usufruitier et Nu-propriétaires" : "Bénéficiaires"}
+                </h4>
                 <div className="flex gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={addBeneficiaire}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Ajouter un bénéficiaire
-                  </Button>
-                  {values.clauseType === "demembree" && (
-                    <Button type="button" variant="outline" size="sm" onClick={addClauseDemembree}>
+                  {values.clauseType === "demembree" ? (
+                    <>
+                      <Button type="button" variant="outline" size="sm" onClick={addUsufruitier}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Ajouter usufruitier
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={addBeneficiaire}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Ajouter nu-propriétaire
+                      </Button>
+                    </>
+                  ) : (
+                    <Button type="button" variant="outline" size="sm" onClick={addBeneficiaire}>
                       <Plus className="w-4 h-4 mr-2" />
-                      Ajouter clause démembrée
+                      Ajouter un bénéficiaire
                     </Button>
                   )}
                 </div>
@@ -228,40 +287,32 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
               
               {values.beneficiaires.map((beneficiaire, index) => (
                 <Card key={index} className="p-4">
-                  {/* Type de clause pour les clauses personnalisées */}
                   {values.clauseType === "demembree" && (
-                    <div className="mb-4">
-                      <Label>Type de clause</Label>
-                      <select
-                        value={beneficiaire.typeClause || "pleine-propriete"}
-                        onChange={(e) => handleBeneficiaireChange(index, "typeClause", e.target.value)}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      >
-                        <option value="pleine-propriete">Pleine propriété</option>
-                        <option value="usufruit">Usufruit</option>
-                        <option value="nue-propriete">Nue-propriété</option>
-                      </select>
+                    <div className="mb-4 p-2 bg-slate-100 rounded">
+                      <span className="text-sm font-medium">
+                        {beneficiaire.typeClause === "usufruit" ? "👤 Usufruitier" : "🏠 Nu-propriétaire"}
+                      </span>
                     </div>
                   )}
 
-                  {/* Informations de l'usufruitier pour les clauses démembrées */}
-                  {(beneficiaire.typeClause === "usufruit" || beneficiaire.typeClause === "nue-propriete") && (
-                    <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                      <h5 className="font-medium mb-2 text-blue-700">👤 Usufruitier (détermine la répartition)</h5>
+                  {/* Informations de l'usufruitier pour déterminer la répartition */}
+                  {values.clauseType === "demembree" && (
+                    <div className="mb-4 p-3 bg-amber-50 rounded-lg">
+                      <h5 className="font-medium mb-2 text-amber-800">
+                        📊 Usufruitier de référence (détermine la répartition)
+                      </h5>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div>
-                          <Label htmlFor={`usufruitier-nom-${index}`}>Nom usufruitier</Label>
+                          <Label>Nom de l'usufruitier</Label>
                           <Input
-                            id={`usufruitier-nom-${index}`}
                             value={beneficiaire.usufruitier?.nom || ""}
                             onChange={(e) => handleUsufruitierChange(index, "nom", e.target.value)}
                             placeholder="Ex: Jean Dupont"
                           />
                         </div>
                         <div>
-                          <Label htmlFor={`usufruitier-age-${index}`}>Âge usufruitier</Label>
+                          <Label>Âge de l'usufruitier</Label>
                           <Input
-                            id={`usufruitier-age-${index}`}
                             type="number"
                             value={beneficiaire.usufruitier?.age || ""}
                             onChange={(e) => handleUsufruitierChange(index, "age", e.target.value)}
@@ -269,9 +320,8 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                           />
                         </div>
                         <div>
-                          <Label htmlFor={`usufruitier-lien-${index}`}>Lien usufruitier</Label>
+                          <Label>Lien de parenté usufruitier</Label>
                           <select
-                            id={`usufruitier-lien-${index}`}
                             value={beneficiaire.usufruitier?.lienParente || "conjoint"}
                             onChange={(e) => handleUsufruitierChange(index, "lienParente", e.target.value)}
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -289,21 +339,22 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
 
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
-                      <Label htmlFor={`nom-${index}`}>
-                        {beneficiaire.typeClause === "usufruit" ? "Nom usufruitier" : 
-                         beneficiaire.typeClause === "nue-propriete" ? "Nom nu-propriétaire" : "Nom/Prénom"}
+                      <Label>
+                        {values.clauseType === "demembree" && beneficiaire.typeClause === "usufruit" 
+                          ? "Nom usufruitier" 
+                          : values.clauseType === "demembree" && beneficiaire.typeClause === "nue-propriete"
+                          ? "Nom nu-propriétaire" 
+                          : "Nom/Prénom"}
                       </Label>
                       <Input
-                        id={`nom-${index}`}
                         value={beneficiaire.nom}
                         onChange={(e) => handleBeneficiaireChange(index, "nom", e.target.value)}
                         placeholder="Ex: Marie Dupont"
                       />
                     </div>
                     <div>
-                      <Label htmlFor={`lien-${index}`}>Lien de parenté / Statut fiscal</Label>
+                      <Label>Lien de parenté / Statut fiscal</Label>
                       <select
-                        id={`lien-${index}`}
                         value={beneficiaire.lienParente}
                         onChange={(e) => handleBeneficiaireChange(index, "lienParente", e.target.value)}
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -319,9 +370,8 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                       </p>
                     </div>
                     <div>
-                      <Label htmlFor={`age-${index}`}>Âge</Label>
+                      <Label>Âge</Label>
                       <Input
-                        id={`age-${index}`}
                         type="number"
                         value={beneficiaire.age}
                         onChange={(e) => handleBeneficiaireChange(index, "age", e.target.value)}
@@ -330,9 +380,8 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
                     </div>
                     <div className="flex gap-2">
                       <div className="flex-1">
-                        <Label htmlFor={`quotite-${index}`}>Quotité (%)</Label>
+                        <Label>Quotité (%)</Label>
                         <Input
-                          id={`quotite-${index}`}
                           type="number"
                           value={beneficiaire.quotite}
                           onChange={(e) => handleBeneficiaireChange(index, "quotite", e.target.value)}
@@ -358,17 +407,6 @@ const DecesInputs: React.FC<DecesInputsProps> = ({ values, onChange }) => {
               <div className={`text-sm ${totalQuotite === 100 ? 'text-green-600' : 'text-red-600'}`}>
                 Total des quotités : {totalQuotite}% {totalQuotite !== 100 && '(doit être égal à 100%)'}
               </div>
-
-              {values.clauseType === "demembree" && (
-                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                  <h5 className="font-medium text-amber-800 mb-2">ℹ️ Fonctionnement du démembrement</h5>
-                  <ul className="text-sm text-amber-700 space-y-1">
-                    <li>• L'âge de l'usufruitier détermine la répartition usufruit/nue-propriété selon le barème fiscal</li>
-                    <li>• Les abattements fiscaux sont répartis au prorata entre usufruitier et nu-propriétaire</li>
-                    <li>• Exemple : usufruitier 65 ans → 40% usufruit, 60% nue-propriété</li>
-                  </ul>
-                </div>
-              )}
             </div>
           )}
         </CardContent>

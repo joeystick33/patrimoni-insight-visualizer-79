@@ -53,8 +53,8 @@ const SimulateurDeces: React.FC = () => {
     values.beneficiaires.every(b => {
       const basicFields = b.nom && b.lienParente && b.age && b.quotite;
       
-      // Vérification spécifique pour les clauses démembrées
-      if (b.typeClause === "usufruit" || b.typeClause === "nue-propriete") {
+      // Pour les clauses démembrées, vérifier les infos usufruitier
+      if (values.clauseType === "demembree") {
         return basicFields && 
                b.usufruitier?.nom && 
                b.usufruitier?.age && 
@@ -124,7 +124,7 @@ const SimulateurDeces: React.FC = () => {
       {!ready && (
         <p className="text-xs text-muted-foreground mt-4">
           Renseignez toutes les valeurs et assurez-vous que la répartition totale des quotités soit égale à 100% pour visualiser les résultats.
-          {values.clauseType === "demembree" && " Pour les clauses démembrées, renseignez également les informations de l'usufruitier."}
+          {values.clauseType === "demembree" && " Pour les clauses démembrées, renseignez également les informations de l'usufruitier de référence."}
         </p>
       )}
       
