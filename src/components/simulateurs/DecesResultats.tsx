@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { formatMontant, formatPourcentage } from "@/lib/utils";
@@ -168,89 +167,104 @@ const DecesResultats: React.FC<DecesResultatsProps> = ({ resultats }) => {
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
-            {resultats.beneficiaires.map((beneficiaire, index) => (
-              <div key={index} className="border rounded-lg p-4">
-                <div className="flex justify-between items-start mb-4">
-                  <h4 className="font-semibold text-lg">{beneficiaire.nom} ({beneficiaire.lienParente})</h4>
-                  {beneficiaire.isExonereTepa && (
-                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
-                      ✅ Exonération Tepa
-                    </span>
+            {resultats.beneficiaires.map((beneficiaire, index) => {
+              const typeClause = (beneficiaire as any).typeClause;
+              const pourcentageUsufruit = (beneficiaire as any).pourcentageUsufruit;
+              const pourcentageNuePropriete = (beneficiaire as any).pourcentageNuePropriete;
+              const usufruitier = (beneficiaire as any).usufruitier;
+              const partUsufruit = (beneficiaire as any).partUsufruit;
+              const partNuePropriete = (beneficiaire as any).partNuePropriete;
+
+              return (
+                <div key={index} className="border rounded-lg p-4">
+                  <div className="flex justify-between items-start mb-4">
+                    <h4 className="font-semibold text-lg">{beneficiaire.nom} ({beneficiaire.lienParente})</h4>
+                    {beneficiaire.isExonereTepa && (
+                      <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+                        ✅ Exonération Tepa
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Affichage spécial pour les clauses démembrées */}
+                  {(typeClause === "usufruit" || typeClause === "nue-propriete") && (
+                    <div className="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                      <h5 className="font-medium text-amber-800 mb-2">🔄 Démembrement de propriété</h5>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <div className="text-amber-700">Part d'usufruit : {formatPourcentage(pourcentageUsufruit || 0)}</div>
+                          {usufruitier && (
+                            <div className="text-xs text-amber-600">Usufruitier : {usufruitier}</div>
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-amber-700">Part de nue-propriété : {formatPourcentage(pourcentageNuePropriete || 0)}</div>
+                          <div className="text-xs text-amber-600">
+                            {typeClause === "usufruit"
+                              ? "Bénéficie de l'usufruit"
+                              : "Bénéficie de la nue-propriété"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   )}
-                </div>
-                
-                {/* Affichage spécial pour les clauses démembrées */}
-                {(beneficiaire.typeClause === "usufruit" || beneficiaire.typeClause === "nue-propriete") && (
-                  <div className="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
-                    <h5 className="font-medium text-amber-800 mb-2">🔄 Démembrement de propriété</h5>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <div className="text-amber-700">Part d'usufruit : {formatPourcentage(beneficiaire.pourcentageUsufruit || 0)}</div>
-                        <div className="text-xs text-amber-600">Usufruitier : {beneficiaire.usufruitier}</div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h5 className="font-medium mb-2">💰 Répartition proportionnelle</h5>
+                      <div className="text-sm space-y-1">
+                        <div>Montant brut total: <span className="font-medium">{formatMontant(beneficiaire.montantBrut)}</span></div>
+                        <div className="text-blue-600">• Base 990 I (avant 70): {formatMontant(beneficiaire.base990I)}</div>
+                        <div className="text-purple-600">• Base 757 B (après 70): {formatMontant(beneficiaire.base757B)}</div>
+                        {(partUsufruit || partNuePropriete) && (
+                          <div className="text-amber-600 text-xs">
+                            • Part effective: {formatPourcentage(
+                              ((partUsufruit || partNuePropriete || 0) * 100) || 0
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <div className="text-amber-700">Part de nue-propriété : {formatPourcentage(beneficiaire.pourcentageNuePropriete || 0)}</div>
-                        <div className="text-xs text-amber-600">
-                          {beneficiaire.typeClause === "usufruit" ? "Bénéficie de l'usufruit" : "Bénéficie de la nue-propriété"}
+                    </div>
+
+                    <div>
+                      <h5 className="font-medium mb-2">⚖️ Fiscalité détaillée</h5>
+                      <div className="text-sm space-y-1">
+                        {beneficiaire.isExonereTepa ? (
+                          <div className="text-green-600 font-medium">Exonération totale (Loi Tepa)</div>
+                        ) : (
+                          <>
+                            <div className="text-blue-600">
+                              Régime 990 I: {formatMontant(beneficiaire.impotAvant70)}
+                              <div className="text-xs">
+                                Abattement {(partUsufruit || partNuePropriete) ? 'proportionnel' : 'standard'}: {formatMontant(beneficiaire.abattementAvant70)}
+                              </div>
+                            </div>
+                            <div className="text-purple-600">
+                              Régime 757 B: {formatMontant(beneficiaire.impotApres70)}
+                              <div className="text-xs">
+                                Abattement {(partUsufruit || partNuePropriete) ? 'proportionnel' : 'proratisé'}: {formatMontant(beneficiaire.abattementApres70)}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                        <div className="border-t pt-1 font-medium">
+                          Total impôts: <span className="text-red-600">{formatMontant(beneficiaire.impotTotal)}</span>
                         </div>
                       </div>
                     </div>
                   </div>
-                )}
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <h5 className="font-medium mb-2">💰 Répartition proportionnelle</h5>
-                    <div className="text-sm space-y-1">
-                      <div>Montant brut total: <span className="font-medium">{formatMontant(beneficiaire.montantBrut)}</span></div>
-                      <div className="text-blue-600">• Base 990 I (avant 70): {formatMontant(beneficiaire.base990I)}</div>
-                      <div className="text-purple-600">• Base 757 B (après 70): {formatMontant(beneficiaire.base757B)}</div>
-                      {(beneficiaire.partUsufruit || beneficiaire.partNuePropriete) && (
-                        <div className="text-amber-600 text-xs">
-                          • Part effective: {formatPourcentage((beneficiaire.partUsufruit || beneficiaire.partNuePropriete || 0) * 100)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
 
-                  <div>
-                    <h5 className="font-medium mb-2">⚖️ Fiscalité détaillée</h5>
-                    <div className="text-sm space-y-1">
-                      {beneficiaire.isExonereTepa ? (
-                        <div className="text-green-600 font-medium">Exonération totale (Loi Tepa)</div>
-                      ) : (
-                        <>
-                          <div className="text-blue-600">
-                            Régime 990 I: {formatMontant(beneficiaire.impotAvant70)}
-                            <div className="text-xs">
-                              Abattement {(beneficiaire.partUsufruit || beneficiaire.partNuePropriete) ? 'proportionnel' : 'standard'}: {formatMontant(beneficiaire.abattementAvant70)}
-                            </div>
-                          </div>
-                          <div className="text-purple-600">
-                            Régime 757 B: {formatMontant(beneficiaire.impotApres70)}
-                            <div className="text-xs">
-                              Abattement {(beneficiaire.partUsufruit || beneficiaire.partNuePropriete) ? 'proportionnel' : 'proratisé'}: {formatMontant(beneficiaire.abattementApres70)}
-                            </div>
-                          </div>
-                        </>
-                      )}
-                      <div className="border-t pt-1 font-medium">
-                        Total impôts: <span className="text-red-600">{formatMontant(beneficiaire.impotTotal)}</span>
-                      </div>
+                  <div className="mt-4 p-3 bg-green-50 rounded-lg">
+                    <div className="text-lg font-semibold text-green-700">
+                      💵 Montant net transmis: {formatMontant(beneficiaire.montantNet)}
+                    </div>
+                    <div className="text-sm text-green-600">
+                      Taux de prélèvement: {formatPourcentage(beneficiaire.tauxImposition)}
                     </div>
                   </div>
                 </div>
-
-                <div className="mt-4 p-3 bg-green-50 rounded-lg">
-                  <div className="text-lg font-semibold text-green-700">
-                    💵 Montant net transmis: {formatMontant(beneficiaire.montantNet)}
-                  </div>
-                  <div className="text-sm text-green-600">
-                    Taux de prélèvement: {formatPourcentage(beneficiaire.tauxImposition)}
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>
