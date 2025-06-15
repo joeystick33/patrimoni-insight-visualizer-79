@@ -6,6 +6,7 @@ export type RachatInputs = {
   anciennete: "moins8" | "plus8";
   modeTMI: "manuel" | "automatique";
   tmi: number; // En % (ex: 30)
+  foyer: number; // Nombre de parts fiscales, pour gérer l’abattement couple
 };
 
 export type RachatResultats = {
@@ -31,6 +32,7 @@ export function calculRachat(inputs: RachatInputs): RachatResultats {
     montantRachat,
     anciennete,
     tmi,
+    foyer,
   } = inputs;
 
   // Part d’intérêts imposable
@@ -45,11 +47,10 @@ export function calculRachat(inputs: RachatInputs): RachatResultats {
   // PFU (12,8%) - jamais d'abattement
   const impotPFU = partInterets * 0.128;
 
-  // Abattement barème IR si +8 ans
+  // Abattement barème IR si +8 ans, selon nombre de parts
   let abattement = 0;
   if (anciennete === "plus8") {
-    abattement = 4600;
-    // Pour couple : 9200, à rendre dynamique selon le foyer
+    abattement = foyer >= 2 ? 9200 : 4600;
   }
 
   // Barème IR : TMI × part après abattement seulement
@@ -84,4 +85,3 @@ export function calculRachat(inputs: RachatInputs): RachatResultats {
     message,
   };
 }
-

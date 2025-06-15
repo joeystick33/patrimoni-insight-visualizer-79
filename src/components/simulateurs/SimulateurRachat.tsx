@@ -52,6 +52,7 @@ const SimulateurRachat: React.FC = () => {
       anciennete: values.anciennete,
       modeTMI: values.modeTMI,
       tmi: tmiValue,
+      foyer: Number(values.foyer) || 1,
     });
   }
 
