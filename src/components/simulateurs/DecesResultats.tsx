@@ -1,3 +1,4 @@
+
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { formatMontant, formatPourcentage } from "@/lib/utils";
@@ -10,6 +11,8 @@ interface ResultatBeneficiaire {
   montantBrut: number;
   partAvant70: number;
   partApres70: number;
+  base990I: number;
+  base757B: number;
   abattementAvant70: number;
   abattementApres70: number;
   imposableAvant70: number;
@@ -28,6 +31,9 @@ interface DecesResultatsProps {
     totalTransmis: number;
     totalImpots: number;
     totalNet: number;
+    ratioApres70: number;
+    base990I: number;
+    base757B: number;
     optimisations: string[];
     alertes: string[];
   };
@@ -43,9 +49,8 @@ const DecesResultats: React.FC<DecesResultatsProps> = ({ resultats }) => {
     color: COLORS[index % COLORS.length]
   }));
 
-  // Données pour le graphique en barres
   const barData = resultats.beneficiaires.map(b => ({
-    nom: b.nom.split(' ')[0], // Premier prénom seulement
+    nom: b.nom.split(' ')[0],
     brut: b.montantBrut,
     impot: b.impotTotal,
     net: b.montantNet
@@ -85,6 +90,20 @@ const DecesResultats: React.FC<DecesResultatsProps> = ({ resultats }) => {
             <div className="bg-green-50 p-4 rounded-lg text-center">
               <div className="text-2xl font-bold text-green-600">{formatMontant(resultats.totalNet)}</div>
               <div className="text-sm text-green-600">Montant net aux bénéficiaires</div>
+            </div>
+          </div>
+
+          {/* Répartition proportionnelle */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+            <div className="text-center">
+              <div className="text-lg font-semibold text-blue-600">{formatMontant(resultats.base990I)}</div>
+              <div className="text-sm text-blue-600">Base 990 I (avant 70 ans)</div>
+              <div className="text-xs text-gray-500">{formatPourcentage(100 - resultats.ratioApres70)} du capital</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-semibold text-purple-600">{formatMontant(resultats.base757B)}</div>
+              <div className="text-sm text-purple-600">Base 757 B (après 70 ans)</div>
+              <div className="text-xs text-gray-500">{formatPourcentage(resultats.ratioApres70)} du capital</div>
             </div>
           </div>
         </CardContent>
@@ -162,25 +181,29 @@ const DecesResultats: React.FC<DecesResultatsProps> = ({ resultats }) => {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <h5 className="font-medium mb-2">💰 Montants reçus</h5>
+                    <h5 className="font-medium mb-2">💰 Répartition proportionnelle</h5>
                     <div className="text-sm space-y-1">
                       <div>Montant brut total: <span className="font-medium">{formatMontant(beneficiaire.montantBrut)}</span></div>
-                      <div>• Part primes/produits avant 70 ans: {formatMontant(beneficiaire.partAvant70)}</div>
-                      <div>• Part primes/produits après 70 ans: {formatMontant(beneficiaire.partApres70)}</div>
+                      <div className="text-blue-600">• Base 990 I (avant 70): {formatMontant(beneficiaire.base990I)}</div>
+                      <div className="text-purple-600">• Base 757 B (après 70): {formatMontant(beneficiaire.base757B)}</div>
                     </div>
                   </div>
 
                   <div>
-                    <h5 className="font-medium mb-2">⚖️ Fiscalité</h5>
+                    <h5 className="font-medium mb-2">⚖️ Fiscalité détaillée</h5>
                     <div className="text-sm space-y-1">
-                      <div>Abattement art. 990 I: {formatMontant(beneficiaire.abattementAvant70)}</div>
-                      <div>Abattement art. 757 B: {formatMontant(beneficiaire.abattementApres70)}</div>
                       {beneficiaire.isExonereTepa ? (
                         <div className="text-green-600 font-medium">Exonération totale (Loi Tepa)</div>
                       ) : (
                         <>
-                          <div>Impôt art. 990 I: <span className="text-red-600">{formatMontant(beneficiaire.impotAvant70)}</span></div>
-                          <div>Impôt art. 757 B: <span className="text-red-600">{formatMontant(beneficiaire.impotApres70)}</span></div>
+                          <div className="text-blue-600">
+                            Régime 990 I: {formatMontant(beneficiaire.impotAvant70)}
+                            <div className="text-xs">Abattement: {formatMontant(beneficiaire.abattementAvant70)}</div>
+                          </div>
+                          <div className="text-purple-600">
+                            Régime 757 B: {formatMontant(beneficiaire.impotApres70)}
+                            <div className="text-xs">Abattement proratisé: {formatMontant(beneficiaire.abattementApres70)}</div>
+                          </div>
                         </>
                       )}
                       <div className="border-t pt-1 font-medium">
@@ -204,18 +227,18 @@ const DecesResultats: React.FC<DecesResultatsProps> = ({ resultats }) => {
         </CardContent>
       </Card>
 
-      {/* Informations fiscales importantes */}
+      {/* Méthode proportionnelle expliquée */}
       <Card className="border-blue-200">
         <CardHeader>
-          <CardTitle className="text-blue-700">ℹ️ Rappels fiscaux</CardTitle>
+          <CardTitle className="text-blue-700">📐 Méthode proportionnelle appliquée</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-sm space-y-2 text-blue-700">
-            <p><strong>Loi Tepa :</strong> Exonération totale des droits de succession pour les conjoints mariés et partenaires PACS.</p>
-            <p><strong>Article 990 I :</strong> Abattement de 152 500 € par bénéficiaire sur les primes avant 70 ans + produits.</p>
-            <p><strong>Article 757 B :</strong> Abattement global de 30 500 € (tous bénéficiaires confondus) sur les primes après 70 ans uniquement.</p>
-            <p><strong>Réintégration fiscale :</strong> Les primes après 70 ans (dépassant l'abattement 757B) sont réintégrées dans la succession avec les abattements de droit commun.</p>
-            <p><strong>Concubins :</strong> Aucune exonération, taux maximal de 60% et abattement minimal de 1 594 €.</p>
+            <p><strong>Répartition automatique :</strong> Le capital total est divisé proportionnellement selon le ratio des primes versées.</p>
+            <p><strong>Base 990 I :</strong> {formatPourcentage(100 - resultats.ratioApres70)} du capital (abattement 152 500 € par bénéficiaire).</p>
+            <p><strong>Base 757 B :</strong> {formatPourcentage(resultats.ratioApres70)} du capital (abattement global 30 500 € réparti au prorata).</p>
+            <p><strong>Intérêts après 70 ans :</strong> Automatiquement exonérés d'impôt pour tous les bénéficiaires.</p>
+            <p><strong>Conjoint/PACS :</strong> Exonération totale grâce à la loi Tepa (0% d'impôt).</p>
           </div>
         </CardContent>
       </Card>
