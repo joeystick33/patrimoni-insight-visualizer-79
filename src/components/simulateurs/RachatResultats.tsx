@@ -1,4 +1,3 @@
-
 import React from "react";
 import {
   ChartContainer,
@@ -21,6 +20,8 @@ import { formatMontant, formatPourcentage } from "@/lib/utils";
 
 type Props = {
   montantRachat: number;
+  parts: number;
+  statut: "celibataire" | "couple";
   resultats: {
     partInterets: number;
     impotPFU: number;
@@ -47,7 +48,7 @@ const colors = {
   interets: "#3b82f6",
 };
 
-const RachatResultats: React.FC<Props> = ({ montantRachat, resultats }) => {
+const RachatResultats: React.FC<Props> = ({ montantRachat, resultats, parts, statut }) => {
   // Données pour le graphique en barres comparatif
   const dataComparaison = [
     {
@@ -88,6 +89,24 @@ const RachatResultats: React.FC<Props> = ({ montantRachat, resultats }) => {
             {resultats.netPFU > resultats.netIR ? formatMontant(resultats.netPFU) : formatMontant(resultats.netIR)}
           </div>
           <div className="text-sm text-green-600">Meilleur montant net</div>
+        </div>
+      </div>
+
+      {/* Informations sur la situation fiscale */}
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div className="text-center">
+            <div className="font-semibold text-slate-700">Situation familiale</div>
+            <div className="text-slate-600">{statut === "couple" ? "Marié/Pacsé" : "Célibataire"}</div>
+          </div>
+          <div className="text-center">
+            <div className="font-semibold text-slate-700">Nombre de parts fiscales</div>
+            <div className="text-slate-600">{parts}</div>
+          </div>
+          <div className="text-center">
+            <div className="font-semibold text-slate-700">Abattement applicable</div>
+            <div className="text-slate-600">{formatMontant(resultats.abattement)}</div>
+          </div>
         </div>
       </div>
 
