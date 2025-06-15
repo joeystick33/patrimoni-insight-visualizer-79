@@ -3,8 +3,8 @@ import React from "react";
 import { cn } from "@/lib/utils";
 
 interface HeaderSimulateurProps {
-  actif: string;
-  setActif: (val: string) => void;
+  actif: "frais" | "rachat" | "deces";
+  setActif: (val: "frais" | "rachat" | "deces") => void;
 }
 
 const tabs = [
@@ -24,7 +24,7 @@ const HeaderSimulateur: React.FC<HeaderSimulateurProps> = ({ actif, setActif }) 
             ? "bg-primary text-primary-foreground shadow-lg after:content-[''] after:absolute after:h-1 after:w-full after:bg-primary after:bottom-0 after:left-0 animate-fade-in"
             : "bg-accent text-accent-foreground hover:bg-secondary"
         )}
-        onClick={() => setActif(tab.id)}
+        onClick={() => setActif(tab.id as "frais" | "rachat" | "deces")}
         aria-current={actif === tab.id}
         type="button"
       >
