@@ -1,4 +1,3 @@
-
 import React from "react";
 import {
   ChartContainer,
@@ -70,7 +69,7 @@ const RachatResultats: React.FC<Props> = ({ montantRachat, resultats }) => {
           <span>{resultats.partInterets.toLocaleString("fr-FR", {maximumFractionDigits: 0})} €</span>
         </div>
         <div className="flex justify-between">
-          <span>Abattement (si > 8 ans) :</span>
+          <span>Abattement (si {">"} 8 ans) :</span>
           <span>{resultats.abattement ? `${resultats.abattement.toLocaleString("fr-FR")} €` : "—"}</span>
         </div>
         <div className="flex justify-between">
