@@ -1,0 +1,78 @@
+
+export type RachatInputs = {
+  valeurContrat: number;
+  versements: number;
+  montantRachat: number;
+  anciennete: "moins8" | "plus8";
+  modeTMI: "manuel" | "automatique";
+  tmi: number; // En % (ex: 30)
+};
+
+export type RachatResultats = {
+  partInterets: number;
+  impotPFU: number;
+  pso: number;
+  impotIR: number;
+  abattement: number;
+  netPFU: number;
+  netIR: number;
+  message?: string;
+};
+
+/**
+ * Calcule toutes les valeurs utiles selon la logique indiquée
+ */
+export function calculRachat(inputs: RachatInputs): RachatResultats {
+  const {
+    valeurContrat,
+    versements,
+    montantRachat,
+    anciennete,
+    tmi,
+  } = inputs;
+
+  // Part d’intérêts imposable
+  const partInterets = Math.max(
+    0,
+    (valeurContrat - versements) * (montantRachat / valeurContrat)
+  );
+
+  // Prélèvements sociaux (toujours 17,2 % sur part intérêts)
+  const pso = partInterets * 0.172;
+
+  // PFU (12,8%)
+  const impotPFU = partInterets * 0.128;
+
+  // Abattement si +8 ans
+  let abattement = 0;
+  if (anciennete === "plus8") {
+    abattement = 4600; // Valeur indicative, à rendre dynamique selon la composition du foyer
+  }
+
+  // IR : TMI × part
+  let partIR = Math.max(0, partInterets - abattement);
+  const impotIR = partIR * (tmi / 100);
+
+  // Net après impôt
+  const netPFU = montantRachat - (impotPFU + pso);
+  const netIR = montantRachat - (impotIR + pso);
+
+  let message = undefined;
+  if (netIR > netPFU)
+    message =
+      "Le PFU (prélèvement forfaitaire unique) est plus avantageux dans votre cas.";
+  else if (netIR < netPFU)
+    message =
+      "Le barème IR est plus avantageux dans votre cas (hors prélèvements sociaux).";
+
+  return {
+    partInterets,
+    impotPFU,
+    pso,
+    impotIR,
+    abattement,
+    netPFU,
+    netIR,
+    message,
+  };
+}

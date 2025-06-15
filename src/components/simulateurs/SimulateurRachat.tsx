@@ -1,84 +1,83 @@
 
 import React, { useState } from "react";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+import RachatInputs from "./RachatInputs";
+import RachatResultats from "./RachatResultats";
+import { calculRachat } from "./simulateurRachatUtils";
 import { cn } from "@/lib/utils";
 
-// Placeholder ui, à compléter étape par étape
+const initialValues = {
+  valeurContrat: "",
+  versements: "",
+  montantRachat: "",
+  anciennete: "moins8" as "moins8" | "plus8",
+  modeTMI: "manuel" as "manuel" | "automatique",
+  tmi: "",
+  rfr: "",
+  foyer: "1",
+};
+
 const SimulateurRachat: React.FC = () => {
-  const [montant, setMontant] = useState("");
-  const [anciennete, setAnciennete] = useState("moins8");
-  const [interets, setInterets] = useState("");
-  const [fiscalite, setFiscalite] = useState("PFU");
+  const [values, setValues] = useState(initialValues);
+
+  // Gestion des modifications (inputs)
+  const handleChange = (name: string, value: string) => {
+    setValues((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // Reset
+  const handleReset = () => setValues(initialValues);
+
+  // Conversion et fallback automatique pour la TMI si mode auto (ici: démo, hardcodé à 30% si auto; à remplacer par vrai calcul si besoin)
+  const tmiValue =
+    values.modeTMI === "manuel"
+      ? parseFloat(values.tmi || "0")
+      : 30; // TODO: Mettre calcul TMI par RFR si demandé
+
+  // Calculs seulement si tous les champs obligatoires sont remplis
+  const ready =
+    !!values.valeurContrat &&
+    !!values.versements &&
+    !!values.montantRachat &&
+    tmiValue > 0;
+
+  let resultats;
+  if (ready) {
+    resultats = calculRachat({
+      valeurContrat: parseFloat(values.valeurContrat),
+      versements: parseFloat(values.versements),
+      montantRachat: parseFloat(values.montantRachat),
+      anciennete: values.anciennete,
+      modeTMI: values.modeTMI,
+      tmi: tmiValue,
+    });
+  }
 
   return (
     <div className="w-full max-w-2xl mx-auto bg-card rounded-xl shadow-xl p-8 animate-fade-in">
-      <h2 className="text-2xl font-bold mb-4 text-primary">Simulateur de rachat</h2>
-      <form className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <div>
-          <Label htmlFor="montant">Montant à racheter (€)</Label>
-          <Input
-            type="number"
-            id="montant"
-            min={0}
-            inputMode="decimal"
-            placeholder="Ex : 15 000"
-            value={montant}
-            onChange={(e) => setMontant(e.target.value)}
-          />
-        </div>
-        <div>
-          <Label htmlFor="interets">Part d’intérêts dans le rachat (€)</Label>
-          <Input
-            type="number"
-            id="interets"
-            min={0}
-            inputMode="decimal"
-            placeholder="Ex : 1 300"
-            value={interets}
-            onChange={(e) => setInterets(e.target.value)}
-          />
-        </div>
-        <div>
-          <Label htmlFor="anciennete">Ancienneté du contrat</Label>
-          <select
-            id="anciennete"
-            className="mt-1 block w-full rounded border px-3 py-2 bg-background ring-1 ring-border focus:outline-none"
-            value={anciennete}
-            onChange={(e) => setAnciennete(e.target.value)}
-          >
-            <option value="moins8">Moins de 8 ans</option>
-            <option value="plus8">8 ans et plus</option>
-          </select>
-        </div>
-        <div>
-          <Label htmlFor="fiscalite">Mécanisme d’imposition</Label>
-          <select
-            id="fiscalite"
-            className="mt-1 block w-full rounded border px-3 py-2 bg-background ring-1 ring-border focus:outline-none"
-            value={fiscalite}
-            onChange={(e) => setFiscalite(e.target.value)}
-          >
-            <option value="PFU">PFU (30%)</option>
-            <option value="IR">Barème IR (après abattement)</option>
-          </select>
-        </div>
+      <h2 className="text-2xl font-bold mb-4 text-primary">Simulation de rachat</h2>
+      <form className="space-y-6" autoComplete="off" onSubmit={e => e.preventDefault()}>
+        <RachatInputs values={values} onChange={handleChange} />
       </form>
-      <div className="mt-8">
+      <div className="flex gap-4 mt-8 flex-wrap">
         <button
           type="button"
           className={cn(
             "bg-primary text-primary-foreground px-6 py-3 rounded-lg font-semibold shadow hover:bg-primary/90 transition"
           )}
-          // TODO: Ajouter la logique de simulation
-          onClick={() => null}
+          onClick={handleReset}
         >
-          Simuler le rachat
+          Recommencer une simulation
         </button>
       </div>
       <p className="text-xs text-muted-foreground mt-4">
-        Saisissez les paramètres du rachat pour simuler le montant net et la fiscalité applicable.
+        Renseignez toutes les valeurs pour visualiser la fiscalité du rachat partiel ou total.
       </p>
+      {ready && resultats && (
+        <RachatResultats montantRachat={parseFloat(values.montantRachat)} resultats={resultats} />
+      )}
     </div>
   );
 };
